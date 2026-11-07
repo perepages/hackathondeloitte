@@ -41,6 +41,10 @@ m[3].metric("Ataques reales detectados", real)
 if any("verdict" in r["example_fields"] for r in rows):
     st.caption("Las conclusiones de esta muestra salen de reglas de prueba mientras el motor definitivo se termina. "
                "Las comprobaciones (paso 2) sí son las reales.")
+elif rows:
+    by_llm = sum(r.get("decision_source") == "llm" for r in rows)
+    st.caption(f"Conclusiones propuestas por la IA en {by_llm} de {n} alertas (el resto, por las reglas de "
+               "respaldo), siempre con la política del SOC aplicada encima. Decide una persona.")
 
 st.subheader("Recorrido de la demo", anchor=False)
 st.caption("En este orden se entiende todo en cinco minutos.")

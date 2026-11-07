@@ -34,7 +34,8 @@ def test_directo_runs_sample_batch():
     at.switch_page("views/directo.py").run()
     at.button(key="directo_go").click().run()
     assert not at.exception, at.exception
-    assert any("esperan a una persona" in s.value for s in at.success)
+    assert any("Alertas que esperan a una persona" in m.value for m in at.markdown)  # tarjetas de escaladas
+    assert any(b.key and b.key.startswith("directo_open_") for b in at.button)
 
 
 def test_cola_review_is_saved():

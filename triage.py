@@ -78,8 +78,11 @@ def _criticality_rank(value: str) -> int:
         return -1
 
 
-def analyze_alert(alert_id: str) -> TriagePreview:
-    """Collect bounded SOC evidence and return a cautious, non-final preview."""
+def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
+    """Recoge evidencias acotadas y, si `decide`, propone veredicto, decisión y acciones (verdict.decide).
+
+    La propuesta la da el LLM (assistant.decide_json) con las reglas de scripts/nivel1_triage.py como red de
+    seguridad, y la política SOC se aplica siempre encima. La decisión final es de una persona."""
     raw_alert = soc_api.get_alert(alert_id)
     alert = Alert.model_validate(raw_alert)
     contexts: list[ContextRecord] = []
@@ -154,6 +157,13 @@ def analyze_alert(alert_id: str) -> TriagePreview:
     indicators: list[tuple[str, str]] = []
     for kind in ("ips", "domains"):
         indicators.extend((kind[:-1], value) for value in _items(entities.get(kind)) if isinstance(value, str))
+    # Indicadores que solo vienen en la evidencia (remitente de un correo, dominio de beaconing o DGA)
+    sender = alert.evidence.get("sender")
+    if isinstance(sender, str) and "@" in sender:
+        indicators.append(("domain", sender.split("@", 1)[1].strip().lower()))
+    for key in ("domain", "parent_domain"):
+        if isinstance(alert.evidence.get(key), str) and alert.evidence[key]:
+            indicators.append(("domain", alert.evidence[key]))
     for indicator_type, indicator in dict.fromkeys(indicators):
         if len([item for item in contexts if item.kind == "intel"]) >= 10:
             break
@@ -236,6 +246,7 @@ def analyze_alert(alert_id: str) -> TriagePreview:
         )
         open_questions.append("Determinar la criticidad del activo o identidad afectada.")
 
+    matrix_severity, matrix_rationale = severity, rationale
     privileged_identity = any(
         _truthy(user.get("vip")) or _truthy(user.get("privileged")) for user in users
     )
@@ -245,11 +256,8 @@ def analyze_alert(alert_id: str) -> TriagePreview:
 
     if not related_logs:
         open_questions.append("Corroborar si hubo actividad posterior o impacto efectivo.")
-    open_questions.append(
-        "El veredicto queda en needs_more_info: esta primera versión no usa todavía un LLM ni sustituye al analista."
-    )
 
-    return TriagePreview(
+    preview = TriagePreview(
         alert=alert,
         contexts=contexts,
         related_logs=related_logs,
@@ -258,4 +266,14 @@ def analyze_alert(alert_id: str) -> TriagePreview:
         severity=severity,
         severity_rationale=rationale,
         open_questions=list(dict.fromkeys(open_questions)),
+    )
+    if not decide:
+        return preview
+    import verdict  # aquí para evitar el import circular (verdict usa los modelos de este módulo)
+
+    return verdict.decide(
+        preview,
+        matrix_severity=matrix_severity,
+        matrix_rationale=matrix_rationale,
+        privileged_identity=privileged_identity,
     )

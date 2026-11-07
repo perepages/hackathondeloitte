@@ -169,6 +169,13 @@ def render_detail(r: dict, scroll: bool) -> None:
             if r["confidence"] is not None:
                 c2.progress(float(r["confidence"]), text=f"Seguridad de la conclusión: {round(r['confidence'] * 100)} %")
             st.markdown(f"> {ui.md(r['justification'] or 'El motor todavía no da una justificación.')}")
+            source = {"llm": "Propuesta de la IA, revisada con las reglas de la política del SOC.",
+                      "rules": "Propuesta de las reglas automáticas (la IA no estaba disponible o no respondió bien)."
+                      }.get(r.get("decision_source"))
+            if source:
+                st.caption(source)
+            for note in r.get("decision_notes") or []:
+                st.caption(f"⚖️ {ui.md(note)}")
             if r["open_questions"]:
                 with st.expander(f"Lo que no ha podido comprobar ({len(r['open_questions'])})",
                                  expanded=r["verdict"] == "needs_more_info"):

@@ -1,0 +1,511 @@
+{
+ "total": 150,
+ "origen_propuesta": {
+  "llm": 150
+ },
+ "mismo_veredicto": 130,
+ "misma_decision": 138,
+ "veredictos_back": {
+  "benign_true_positive": 39,
+  "false_positive": 51,
+  "true_positive": 60
+ },
+ "decisiones_back": {
+  "close": 122,
+  "escalate": 28
+ },
+ "discrepancias_por_regla": {
+  "UC-EML-001": 7,
+  "UC-WEB-001": 3,
+  "UC-VPN-001": 3,
+  "UC-NET-006": 3,
+  "UC-WEB-003": 2,
+  "UC-EDR-003": 2,
+  "UC-EML-003": 1,
+  "UC-DLP-001": 1,
+  "UC-IDP-001": 1,
+  "UC-IDP-003": 1,
+  "UC-CLD-004": 1,
+  "UC-WEB-002": 1,
+  "UC-IDP-008": 1,
+  "UC-CLD-003": 1
+ },
+ "discrepancias": [
+  {
+   "alert_id": "ALR-20261005-000200",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.9,
+    "justification": "La alerta corresponde a un correo de phishing realmente malicioso: el dominio sorteo-iphone17.example aparece en la inteligencia con reputación sospechosa y tag de scam, y el mensaje cumple todos los patrones de estafa (premio no solicitado, dominio externo, DMARC fallido). El usuario reportó la amenaza y el sistema lo marcó como spam, por lo que no hubo ejecución ni clic confirmado. No se trata de una frase normal de cliente (no es la alerta de asistente de compra UC-AI-001) ni de un dominio legítimo de CDN/cloud. La actividad maliciosa es real aunque se contuvo en el gateway."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportado; TIP: sorteo-iphone17.example = suspicious (scam, conf 60). Purgar correo y bloquear dominio."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261005-000440",
+   "rule_id": "UC-WEB-001",
+   "back": {
+    "verdict": "false_positive",
+    "decision": "close",
+    "severity": "informational",
+    "confidence": 0.85,
+    "justification": "La alerta dispara por firma de scanner en WAF contra wp-login.php, pero la única evidencia disponible es una petición GET bloqueada (403) con user_agent curl y sin payloads SQLi/XSS/LFI concretos. La IP pertenece a un proveedor de hosting clasificado como escáner de Internet, sin indicadores de maliciousidad en inteligencia. Se trata de tráfico de escaneo rutinario contra un endpoint público, sin confirmación de ejecución de ataque ni acceso. La severidad provisional es low y no hay activo de criticidad determinada."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Intento real de Scanner Detection (16 hits) desde Hosting (escáner de Internet, simulado), pero el WAF lo bloqueó y no hay efecto: ruido de Internet, cerrar."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261007-011785",
+   "rule_id": "UC-EML-003",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "critical",
+    "confidence": 0.85,
+    "justification": "La regla de EMAIL_GW detectó un enlace de spearphishing (T1566.002) que la reescritura reclasificó como phishing. El contexto es coherente con un ataque real: asunto urgente de firma, dominio que imita un SSO de la empresa y destino en hosting externo. Los datos de inteligencia no confirman maldad explícita, pero la política indica que la ausencia de inteligencia no basta para declarar benigno cuando hay indicios concretos. El dominio de destino no es un subdominio de un CDN/cloud legítimo, por lo que no aplica la excepción de false_positive. El hecho de que el usuario haya interactuado con un endpoint de autenticación sugiere posible entrega de credenciales, lo que eleva la severidad (+1) y justifica escalar por compromiso de datos personales/credenciales."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-EML-003 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261007-001237",
+   "rule_id": "UC-DLP-001",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "close",
+    "severity": "low",
+    "confidence": 0.85,
+    "justification": "La regla DLP disparó por volumen (>100 MB) a un servicio externo, pero WeTransfer.com figura en la inteligencia como servicio legítimo de uso dual con reputación benigna y alta confianza, no como IOI malicioso. El archivo es material gráfico de campaña (no contiene datos personales: personal_data_matches=0), el usuario pertenece a E-commerce (rol coherente con el contenido), el activo es de criticidad media y no hay actividad posterior sospechosa ni cambios aprobados que contradigan la legitimidad. La política indica que un subdominio/servicio legítimo de uso dual es patrón normal salvo inteligencia maliciosa, y aquí no la hay. Se descarta false_positive porque la detección es correcta (subida real de gran volumen), pero la actividad está autorizada por ser uso legítimo de un servicio dual conocido."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-DLP-001 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261009-001917",
+   "rule_id": "UC-IDP-001",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "close",
+    "severity": "low",
+    "confidence": 0.85,
+    "justification": "La detección es correcta (dos sesiones en ubicaciones incompatibles en el tiempo), pero la actividad está autorizada: el dispositivo es conocido, conforme y firmado por la política, el MFA se cumplió en ambos casos y el acceso condicional fue exitoso. La IP de París corresponde a un proveedor de salida de VPN/Private Relay del propio móvil corporativo, no a un acceso remoto real desde Francia. No hay indicios de cuenta comprometida (mismo usuario, MFA válido, dispositivo confiable, sin actividad posterior sospechosa). Por tanto es un benign_true_positive."
+   },
+   "reglas": {
+    "verdict": "false_positive",
+    "decision": "close",
+    "justification": "Dispositivo corporativo conocido y conforme, sin anonimizadores ni acciones raras. La IP lejana es Microsoft (salida de Private Relay/VPN del móvil, simulado)."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261010-011827",
+   "rule_id": "UC-IDP-003",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "high",
+    "confidence": 0.85,
+    "justification": "La regla T1621 (MFA push spam) se disparó con 27 push en 9 minutos. Los registros idp_signins muestran 5 intentos consecutivos de denegación/timeout desde la misma IP de VPN comercial, lo que descarta una actividad legítima de un usuario real probando su MFA. El campo final_result='approved' en la alerta confirma que se consiguió la aprobación tras el bombardeo, es decir, ejecución y acceso confirmados (no una simple resolución). Aunque la IP figura como salida de VPN comercial con reputación unknown, el patrón de fatiga + aprobación no corresponde con uso normal. Es actividad maliciosa real (acceso a cuenta de empleado), por lo que corresponde escalar por posible robo de credenciales/acceso no autorizado."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-IDP-003 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261011-011807",
+   "rule_id": "UC-WEB-003",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "critical",
+    "confidence": 0.85,
+    "justification": "La secuencia login con huella headless > cambio de email > compra de tarjeta regalo con tarjeta guardada en menos de 30 min coincide exactamente con la regla de ATO (T1657, Financial Theft). El nuevo dominio de correo es desechable (tempmail-box.example), patrón típico de suplantación, y la IP es un proxy residencial de Vietnam, no un cliente legítimo. La inteligencia confirma el perfil malicioso de la IP. Al no haber control que bloquee la acción ni actividad posterior que la invalide, se considera ejecución confirmada, por lo que corresponde +1 de severidad y escalar por ser fraude económico con datos de cuenta de cliente."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-WEB-003 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261011-011806",
+   "rule_id": "UC-WEB-003",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "critical",
+    "confidence": 0.85,
+    "justification": "La regla de ATO se dispara por cambio de email seguido de compra de tarjeta regalo en menos de 30 min, un patrón clásico de fraude. La huella headless del login, el dominio de correo desechable (tempmail-box.example) y el hecho de que la IP sea un proxy residencial (AS64704, Brasil) son indicios concretos de actividad maliciosa, no de un cliente legítimo. No hay cambio aprobado ni herramienta corporativa que lo justifique. La inteligencia confirma el contexto malicioso de la IP, por lo que no es un falso positivo ni carece de datos."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-WEB-003 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261011-011877",
+   "rule_id": "UC-VPN-001",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "escalate",
+    "severity": "informational",
+    "confidence": 0.72,
+    "justification": "La alerta corresponde a un acceso VPN real y confirmado (evento VPN-0010704, action=connect, MFA aprobado), por lo que no es false_positive. La cuenta es legítima (proveedor WMS, account_type=external, status=active), pero el origen difiere del habitual: ASN nuevo, país distinto (Letonia vs Madrid) y horario fuera de ventana contractual. No existe inteligencia maliciosa sobre 77.90.185.20 (solo is_hosting=True, no es Tor ni proxy residencial), y no hay registros de actividad posterior tras la conexión. Esto no encaja en el patrón de subdominio aleatorio de CDN/cloud, y la actividad está confirmada (acceso real, no simple resolución). Dado que la criticidad del activo afectado no se puede determinar y hay dudas sobre un indicador de severidad que podría escalar, corresponde escalar para confirmar identidad y propósito."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "close",
+    "justification": "Regla UC-VPN-001 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261011-002595",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.9,
+    "justification": "La inteligencia maliciosa confiable (TIP de Tarvia, reputation 'suspicious', tag 'scam') sobre el dominio sorteo-iphone17.example cumple la excepción de la política: un patrón normal de CDN/cloud solo sería false_positive sin inteligencia maliciosa, y aquí la hay. La técnica T1566 (Phishing) y el contenido ('has ganado un iPhone') son coherentes con un intento real de Initial Access. El correo fue entregado (action: delivered) pese a ser marcado como spam, por lo que no se trata de un intento bloqueado sin actividad posterior: el usuario recibió material malicioso. No hay clic ni descarga confirmada, así que no asciendo a +1, pero la entrega a un buzón real justifica el veredicto de true_positive."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportado; TIP: sorteo-iphone17.example = suspicious (scam, conf 60). Purgar correo y bloquear dominio."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261013-003419",
+   "rule_id": "UC-EDR-003",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.9,
+    "justification": "La regla de EDR detectó un PUA con comportamiento malicioso real (firma sospechosa, familia PUA, score 45 en sandbox), por lo que constituye actividad maliciosa aunque se bloqueó. El archivo se ejecutó desde Downloads con integridad Media y sin firma, patrón típico de descarga de usuario. Al ser un intento bloqueado por el EDR sin actividad posterior, aplica severity_adjustment -1 según política. No es benign: no hay cambio aprobado ni herramienta corporativa firmada; el sandbox lo marca 'suspicious' y no hay nada que lo autorice."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Malware PUA:Win32/WebCompanion detectado y quarantined por el AV sin ejecutarse."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261014-004078",
+   "rule_id": "UC-NET-006",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "high",
+    "confidence": 0.85,
+    "justification": "La regla de túnel DNS (T1048.003) se dispara con 276 consultas a subdominios largos (>40 caracteres, media de 48) de un mismo dominio en 1 hora. Las consultas muestran cadenas hexadecimales de 60 caracteres (fd8d388d..., b4f7da51..., etc.) que son el patrón clásico de exfiltración DNS codificada, no un subdominio aleatorio de un CDN legítimo. Las respuestas 127.0.0.2 con NOERROR confirman que el canal funciona y hay ejecución real (no una simple resolución DNS normal). El activo es un portátil de criticidad media en zona MAD-USERS con EDR instalado. La ausencia de inteligencia no lo hace benigno: los indicios concretos (patrón de codificación + volumen + ejecución confirmada) superan el umbral. Se aplica +1 por ejecución confirmada."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-NET-006 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261014-003645",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "medium",
+    "confidence": 0.95,
+    "justification": "El dominio micr0soft-365-billing.example está confirmado como malicioso en la inteligencia (reputación 90, tag phishing), por lo que no es un subdominio legítimo de CDN/cloud ni una frase normal de cliente. La alerta se disparó por reporte real de un usuario, no por una falsa alarma de frase. El correo fue entregado (action: delivered) pese a un verdict de spam, con credenciales de remitente falsificadas (SPF fail, DKIM none, DMARC fail), lo que constituye un intento de phishing con ejecución confirmada (entrega real, no solo resolución DNS o conexión) contra un administrador de sistemas. Por política, la ejecución confirmada suma +1 de severidad y el objetivo de una cuenta privilegiada justifica escalar."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportado; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar correo y bloquear dominio."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261016-011821",
+   "rule_id": "UC-CLD-004",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "critical",
+    "confidence": 0.92,
+    "justification": "La regla dispara por descarga masiva desde un bucket clasificado como Crítico (copias del CRM). Las evidencias de Cloudtrail confirman ejecución real: múltiples eventos GetObject con errorCode vacío y bytes_transferred de 48 MB a 118 MB por objeto, es decir acceso y descarga confirmados, no una conexión o resolución. La identidad 'backup-sync' no tiene cambio aprobado ni está asociada a herramienta corporativa firmada en los datos. El contexto de inteligencia muestra que la IP de origen es un hosting no gestionado en Rumanía y el user agent indica Kali Linux, lo que descarta un comportamiento legítimo de sincronización de copias. Se conserva la severidad high de la regla y se aplica +1 por ejecución y robo de datos personales (copias del CRM)."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-CLD-004 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261016-004912",
+   "rule_id": "UC-EDR-003",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.85,
+    "justification": "Hay indicio concreto de actividad maliciosa: un PUA con firma ausente descargado y ejecutado desde Downloads, detectado por EDR y cuarentenado antes de ejecutar. No es un falso positivo (no es servicio legítimo ni dispositivo conocido) ni benign (no hay cambio aprobado ni herramienta corporativa firmada). La sandbox lo confirma como sospechoso (score 45, familia PUA). Al ser intento bloqueado por control sin actividad posterior confirmada, aplica severity_adjustment -1. La criticidad del activo es Media y el usuario no es privilegiado, pero al tratarse de PEA detectada en puesto de trabajo se escala para descartar infección residual o descarga adicional."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Malware PUA:Win32/WebCompanion detectado y quarantined por el AV sin ejecutarse."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261017-004972",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.95,
+    "justification": "La alerta indica un correo reportado como phishing y la inteligencia confirma que el dominio micr0soft-365-billing.example es malicioso (phishing, campaña de facturas), con alta confianza. Los registros de correo confirman origen externo con autenticación fallida (SPF/DMIC/DMARC) y entrega del mensaje, lo que constituye actividad maliciosa real (T1566 Phishing). No es un subdominio legítimo de CDN/cloud ni una frase normal de cliente, y la inteligencia es concreta, así que no aplica false_positive. La severidad de regla es low y el activo no es privilegiado ni VIP, pero la política exige escalar cuando hay phishing confirmado con entrega pese a controles de seguridad, por riesgo de robo de credenciales."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportado; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar correo y bloquear dominio."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261018-011879",
+   "rule_id": "UC-VPN-001",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "escalate",
+    "severity": "informational",
+    "confidence": 0.72,
+    "justification": "La alerta UC de acceso VPN de tercero fuera de horario o desde origen nuevo es correcta: el IP 77.90.185.20 pertenece a un servicio de hosting (is_hosting: True) en Letonia, no a la red corporativa de Logisoft en Madrid, y la conexión ocurrió el domingo a las 02:46, fuera de la ventana contractual L-V 8-18 h. No hay indicadores de manipulación (injection_detected: false) ni frases de cliente ambiguas. La actividad está autenticada con MFA aprobado y la cuenta es legítima (proveedor WMS, account_type: external, status: active), lo que apunta a benign_true_positive si se confirma autorización. Sin embargo, la conexión se ejecutó (action: connect, assigned_ip: 10.99.60.12) sin bloqueo, y la criticidad del activo alcanzado (probablemente WMS01 por RDP) no está determinada, por lo que no basta para cerrar: hay duda en un elemento de severidad media potencial y ejecución confirmada, lo que exige escalar para validar la autorización del proveedor."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "close",
+    "justification": "Regla UC-VPN-001 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261018-005422",
+   "rule_id": "UC-WEB-002",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "high",
+    "confidence": 0.85,
+    "justification": "La alerta describe un pico de 60 fallos de login con 1 IP de origen y patrón automatizado, sin conteos de éxito, lo que encaja con credential stuffing. La inteligencia de la IP confirma hosting (is_hosting: True), un indicio concreto de actividad maliciosa, no un patrón normal de CDN/cloud legítimo. El control (rate limit) bloqueó la actividad y no hay evidencia de ejecución ni acceso confirmado, por lo que no corresponde +1; la severidad de regla (high) se conserva sin ajuste. Al ser un ataque contra credenciales de clientes, la política exige escalar para determinar criticidad del activo y corroborar impacto."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-WEB-002 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261019-011888",
+   "rule_id": "UC-NET-006",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "high",
+    "confidence": 0.9,
+    "justification": "La regla de túnel DNS se dispara con evidencia sólida: 266 consultas TXT a subdominios de >40 caracteres, avg_label_len 52, ventana 03:00-04:00 (nocturna, atípica para un WMS), y respuestas con contenido base64 decodificable. El dominio cdn-wms-metrics.example NO es un subdominio de un CDN/cloud legítimo (amazonaws.com, cloudfront.net, etc.), por lo que no aplica la excepción de false_positive. El único contexto autorizado (CHG-2026-1071) es una actualización del proveedor Logisoft que concluyó el 2026-10-16, muy anterior a la actividad del 2026-10-19, y no cubre consultas DNS de exfiltración. La ausencia de inteligencia no lo hace benigno: hay indicios concretos de ejecución confirmada (respuestas NOERROR con payloads), no una simple resolución. Se aplica +1 por activo de criticidad Alta y ejecución confirmada."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-NET-006 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261023-011915",
+   "rule_id": "UC-IDP-008",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.92,
+    "justification": "La regla dispara por alta en grupo privilegiado (Backup Operators), técnica T1098 de persistencia. La cuenta es administradora legítima, con MFA FIDO2, VIP falso, y su uso está restringido a JUMP01 según notas HR. El evento 4728 se originó desde JUMP01, host autorizado para operaciones de administración. Entre los cambios aprobados no hay uno que cite directamente esta alta de grupo, pero CHG-2026-1057 (despliegue de agente de monitorización desde JUMP01 con cuenta adm) y CHG-2026-1063 (mantenimiento remoto vía JUMP01) establecen un patrón de uso legítimo de la cuenta desde ese host. No hay indicios de ejecución maliciosa posterior, ni robo de credenciales, ni persistencia más allá del propio evento. La ausencia de ticket específico reduce la certeza pero el conjunto de evidencias (origen autorizado + identidad legítima + MFA + sin actividad posterior) apunta a actividad autorizada, no a ataque real."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-IDP-008 sin lógica N1 automática todavía: revisión humana. Identidad VIP/privilegiada: adm.aferrer@tarvia.example."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261025-011881",
+   "rule_id": "UC-VPN-001",
+   "back": {
+    "verdict": "false_positive",
+    "decision": "close",
+    "severity": "informational",
+    "confidence": 0.75,
+    "justification": "La alerta dispara por acceso fuera de ventana contractual desde ASN no visto, pero las evidencias no confiruran malicia: MFA aprobado, cuenta de proveedor activa y no privilegiada, sin eventos HR sospechosos, sin actividad posterior y sin inteligencia contra la IP o el upn. La IP 77.90.185.20 es infraestructura cloud (is_hosting=True) de un ASN común para servicios legítimos; no figura como Tor, proxy residencial ni proveedor de VPN de evasión. Según los criterios del SOC, un origen nuevo sobre un servicio legítimo sin indicios concretos de ataque no constituye actividad maliciosa. La ventana fuera de horario y el origen distinto son coherentes con una posible práctica operativa del proveedor (o con una configuración de salida compartida de su infraestructura), pero no bastan por sí solos para declarar un ataque."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "close",
+    "justification": "Regla UC-VPN-001 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261026-008404",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.95,
+    "justification": "La inteligencia de seguridad confirma que el dominio micr0soft-365-billing.example es malicioso (phishing, confidence 90), lo que convierte la detección en una amenaza real y no en un falso positivo de regla. Los indicadores técnicos (SPF fail, DKIM none, DMARC fail, dominio de imitación de marca) corroboran la intención maliciosa. Aunque el correo fue clasificado como spam, la acción 'delivered' significa que el mensaje llegó al buzón del usuario, por lo que hay exposición real a un intento de acceso no autorizado (T1566 Phishing). No consta clic ni introducción de credenciales, pero la entrega a un usuario con rol de compras justifica escalar para evaluar si se requieren medidas de contención."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportado; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar correo y bloquear dominio."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261026-008224",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "close",
+    "severity": "informational",
+    "confidence": 0.85,
+    "justification": "La regla EMAIL_GW dispara cuando un usuario reporta un correo como phishing, pero la evidencia de entrega confirma autenticidad: SPF pass, DKIM pass, DMARC pass y sender en el dominio oficial docusign.net, que es un proveedor corporativo legítimo de firma de contratos (coherente con el asunto «contrato de suministro»). El veredicto del gateway es «clean» y la IP de origen (198.18.0.230) corresponde al rango de sandbox del SOC, no a infraestructura maliciosa. No hay indicios de suplantación ni de intento de robo de credenciales. El reporte del usuario es una acción humana de falso positivo, típica en reglas de reporte manual sin validación previa."
+   },
+   "reglas": {
+    "verdict": "false_positive",
+    "decision": "close",
+    "justification": "Remitente legítimo (docusign.net), asunto «Completado: contrato de suministro»: correo transaccional reportado por error."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261028-011893",
+   "rule_id": "UC-NET-006",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "high",
+    "confidence": 0.92,
+    "justification": "La regla de túnel DNS se cumple con creces: >200 consultas en 1 h, subdominios largos (>40 caracteres), qtype TXT y un único cliente. El dominio cdn-wms-metrics.example NO es un subdominio de un CDN o cloud legítimo (amazonaws.com, cloudfront.net, etc.), sino un dominio propio de 32 días de antigüedad, por lo que no aplica la excepción de patrón normal. Las respuestas base64 en las consultas de prueba confirman ejecución de canal de datos real (no solo resolución DNS), lo que suma +1 de severidad. No hay inteligencia maliciosa registrada, pero la política indica que 'sin datos' no basta para llamarlo benigno y aquí hay indicios concretos de exfiltración. El activo es de criticidad Alta y alberga datos de gestión de almacén, por lo que corresponde escalar."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-NET-006 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261030-010347",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "low",
+    "confidence": 0.95,
+    "justification": "La alerta se dispara por reporte de usuario, pero la inteligencia confirma que el dominio remitente es malicioso (phishing, campaña de facturas, confianza 90), por lo que no es un falso positivo ni una frase normal. El correo es un intento real de acceso inicial (T1566 Phishing) dirigido a una empleada. No hay evidencia de que el usuario hiciera clic en el enlace o descargara algo, ni de ejecución ni robo de credenciales, por lo que la severidad se mantiene en low sin ajuste. Al ser phishing confirmado con inteligencia maliciosa, corresponde escalar para evaluar si se revocan sesiones o se restablece la contraseña de la cuenta como medida preventiva."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportado; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar correo y bloquear dominio."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261031-010556",
+   "rule_id": "UC-WEB-001",
+   "back": {
+    "verdict": "false_positive",
+    "decision": "close",
+    "severity": "informational",
+    "confidence": 0.85,
+    "justification": "La alerta dispara por firma de PHP Injection (regla 933100), pero la URL objetivo es una ruta estándar de la librería phpunit, no un endpoint de ejecución de código. El agente 'Nuclei - Open-source project' confirma que se trata de un escáner automatizado explorando rutas conocidas. Todas las peticiones fueron bloqueadas (403) y no hay registros de ejecución, acceso ni movimiento posterior. La IP es un hosting/escáner de Internet, sin inteligencia maliciosa específica. Se trata de tráfico de escaneo rutinario contra un recurso que no constituye un vector efectivo, por lo que la regla detecta una actividad de reconocimiento pero no un ataque con impacto real."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Intento real de PHP Injection (4 hits) desde Hosting (escáner de Internet, simulado), pero el WAF lo bloqueó y no hay efecto: ruido de Internet, cerrar."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261031-010661",
+   "rule_id": "UC-WEB-001",
+   "back": {
+    "verdict": "false_positive",
+    "decision": "close",
+    "severity": "informational",
+    "confidence": 0.85,
+    "justification": "La evidencia muestra un patrón de escaneo automatizado (27 hits, user_agent zgrab/0.x, URI /wp-login.php, host www.tarvia.example) con acción 'blocked' y status 403. La IP 198.19.60.165 está clasificada como hosting/escáner de Internet sin inteligencia maliciosa específica (tip: null). No hay intento de explotación real con payloads SQLi/XSS/LFI, solo detección de scanner contra un endpoint público de login, que es tráfico normal de fondo en aplicaciones web expuestas. La regla se disparó por el patrón de escaneo, no por una explotación exitosa. Sin datos de inteligencia que vinculen esta IP a una campaña concreta, no basta para considerarlo ataque real."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Intento real de Scanner Detection (27 hits) desde Hosting (escáner de Internet, simulado), pero el WAF lo bloqueó y no hay efecto: ruido de Internet, cerrar."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261101-010863",
+   "rule_id": "UC-CLD-003",
+   "back": {
+    "verdict": "benign_true_positive",
+    "decision": "close",
+    "severity": "low",
+    "confidence": 0.85,
+    "justification": "La alerta se dispara por la regla 'Bucket de almacenamiento con acceso público' (T1537), pero las evidencias muestran que PutBucketPolicy fue ejecutado por svc_ecom_deploy (IAMUser, accessKeyId AKIATARVIA7XQ2DEPLY) desde sourceIPAddress 172.16.10.21 (rango interno) con userAgent terraform/1.9.5, indicando un pipeline de despliegue automatizado. La política resultante concede s3:GetObject a Principal * con el propósito documentado de servir imágenes de producto, lo que es un patrón legítimo de hosting de contenido estático. No hay indicios de exfiltración (no hay GetObject masivo, no hay destino externo sospechoso, no hay acceso a datos personales). El cambio proviene de infraestructura como código corporativa firmada (terraform desde runner CI interno), por lo que la detección es correcta pero la actividad está autorizada."
+   },
+   "reglas": {
+    "verdict": "needs_more_info",
+    "decision": "escalate",
+    "justification": "Regla UC-CLD-003 sin lógica N1 automática todavía: revisión humana."
+   },
+   "notas": []
+  }
+ ]
+}

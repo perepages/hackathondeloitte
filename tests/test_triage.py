@@ -45,7 +45,9 @@ def test_analyze_alert_gathers_context_and_keeps_unconfirmed_verdict(monkeypatch
     result = triage.analyze_alert("ALR-1")
 
     assert result.alert.alert_id == "ALR-1"
-    assert result.verdict == "needs_more_info"
+    assert result.verdict == "needs_more_info"  # regla sin lógica N1: las reglas no se atreven
+    assert result.decision == "escalate"  # needs_more_info de gravedad media o más: escalado obligatorio
+    assert result.decision_source == "rules"
     assert result.severity == "high"  # medium x high asset, plus privileged user
     assert {item.kind for item in result.contexts} >= {"asset", "user", "intel"}
     assert result.related_logs[0]["event_id"] == "EDR-123"

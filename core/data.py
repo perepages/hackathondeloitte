@@ -8,9 +8,10 @@ Modos (variable de entorno SOC_MODE):
   fixture (por defecto)  lee data/fixture.json; no necesita la API ni el back.
   live                   llama al back real (triage.analyze_alert) contra la API :8000.
 
-Campos de ejemplo: el back todavía no genera veredicto, decisión, acciones, etc. El fixture
-los trae en `_ejemplo` (reglas de prueba). Se usan SOLO si el back no da el campo, y quedan
-listados en `view["example_fields"]` para que la interfaz los marque como «dato de ejemplo».
+Campos de ejemplo: el back (verdict.decide) ya da veredicto, decisión, acciones, inyección, título y
+resumen; `decision_source` dice si la propuesta salió del LLM o de las reglas de respaldo. El fixture
+trae además `_ejemplo` (reglas de prueba), que se usa SOLO si el back no da el campo (hoy, incident_id);
+esos campos quedan en `view["example_fields"]` y la interfaz los marca como «dato de ejemplo».
 Con SOC_EXAMPLES=0 se desactivan y se ve el back tal cual.
 
 CONTRATO DEL FRONT (lo que devuelve to_view):
@@ -28,6 +29,7 @@ CONTRATO DEL FRONT (lo que devuelve to_view):
   incident_id          texto o None
   queries   [{method, path, params, status (ok|not_found|error), result_count, note, summary}]
   contexts  [{kind, key, data}]   related_logs [dict]   (del back)
+  decision_source  llm | rules | None      decision_notes  [correcciones de la política a la propuesta]
   example_fields  [nombres de campos que vienen de `_ejemplo`]
   review          {decision, analyst, note, at} o None   (decisión de la persona, de core/store)
 """
@@ -47,7 +49,8 @@ FIXTURE = os.path.join(ROOT, "data", "fixture.json")
 MODE = os.getenv("SOC_MODE", "fixture").lower()
 USE_EXAMPLES = os.getenv("SOC_EXAMPLES", "1") != "0"
 
-EXAMPLE_FIELDS = ("verdict", "confidence", "justification", "decision", "asset_criticality", "title",
+# asset_criticality no está: la calcula to_view con el inventario (las reglas ponían «Media» si no había activo)
+EXAMPLE_FIELDS = ("verdict", "confidence", "justification", "decision", "title",
                   "summary", "recommended_actions", "injection_flags", "incident_id")
 _EMPTY = {"verdict": "needs_more_info", "confidence": None, "justification": "", "decision": "escalate",
           "asset_criticality": None, "title": "", "summary": "", "recommended_actions": [],
@@ -114,9 +117,14 @@ def to_view(preview: dict) -> dict:
     crits = [str(c["data"].get("criticality")) for c in contexts if c.get("kind") == "asset" and c["data"].get("criticality")]
     view["asset_criticality"] = max(crits, key=lambda c: CRIT_RANK.get(c.lower(), -1)) if crits else None
 
+    view["decision_source"] = preview.get("decision_source")  # llm | rules | None (back sin propuesta)
+    view["decision_notes"] = preview.get("decision_notes") or []
+    decided = view["decision_source"] is not None
     for f in EXAMPLE_FIELDS:
         back_value = preview.get(f, view.get(f))
-        back_gives = back_value not in (None, "", []) and not (f == "verdict" and back_value == "needs_more_info")
+        # Si el back ya ha decidido, sus listas vacías y su needs_more_info son respuesta, no hueco.
+        back_gives = (back_value not in (None, "", []) and not (f == "verdict" and back_value == "needs_more_info")
+                      or decided and f in ("verdict", "injection_flags", "recommended_actions"))
         if back_gives:
             view[f] = back_value
         elif ej.get(f) not in (None, "", []):
