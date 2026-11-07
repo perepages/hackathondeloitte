@@ -1,0 +1,570 @@
+<title>Tarvia Triaje N1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: consola de SOC con tres vistas — cola + investigación, triaje en directo (kanban), panel de negocio */
+:root {
+  --bg: #eef1f5; --panel: #ffffff; --ink: #172031; --muted: #5d6879; --line: #d9dfe8; --soft: #f5f7fa;
+  --accent: #2b55c7; --accent-soft: #e4ebfb; --on-fill: #ffffff;
+  /* severidad (estado): reservada, siempre con etiqueta */
+  --sev-critical: #d03b3b; --sev-high: #ec835a; --sev-medium: #e0a514; --sev-low: #7f97b2; --sev-info: #a7adb7;
+  /* veredicto (categórico, paleta validada: azul, naranja, aqua, amarillo) */
+  --v-fp: #2a78d6; --v-tp: #eb6834; --v-btp: #1baf7a; --v-nmi: #eda100;
+  /* rampa secuencial azul para el mapa de calor */
+  --q0: #f1f4f9; --q1: #cde2fb; --q2: #9ec5f4; --q3: #6da7ec; --q4: #3987e5; --q5: #256abf; --q6: #184f95;
+  --ok: #1a8a5f;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f141d; --panel: #171e2a; --ink: #e3e8f0; --muted: #96a1b3; --line: #2a3342; --soft: #1d2533;
+  --accent: #7d9cf0; --accent-soft: #222f4d; --on-fill: #ffffff;
+  --sev-critical: #e05252; --sev-high: #e07a4f; --sev-medium: #d29a12; --sev-low: #6d86a3; --sev-info: #6b7380;
+  --v-fp: #3987e5; --v-tp: #d95926; --v-btp: #199e70; --v-nmi: #c98500;
+  --q0: #1d2533; --q1: #104281; --q2: #184f95; --q3: #1c5cab; --q4: #2a78d6; --q5: #5598e7; --q6: #86b6ef;
+  --ok: #3cc28a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f141d; --panel: #171e2a; --ink: #e3e8f0; --muted: #96a1b3; --line: #2a3342; --soft: #1d2533;
+  --accent: #7d9cf0; --accent-soft: #222f4d; --on-fill: #ffffff;
+  --sev-critical: #e05252; --sev-high: #e07a4f; --sev-medium: #d29a12; --sev-low: #6d86a3; --sev-info: #6b7380;
+  --v-fp: #3987e5; --v-tp: #d95926; --v-btp: #199e70; --v-nmi: #c98500;
+  --q0: #1d2533; --q1: #104281; --q2: #184f95; --q3: #1c5cab; --q4: #2a78d6; --q5: #5598e7; --q6: #86b6ef;
+  --ok: #3cc28a; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 32px }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 16px }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; font-weight: 600 }
+h1 { font-size: 24px; letter-spacing: .01em }
+h2 { font-size: 20px }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600 }
+p { margin: 0 }
+.mono { font-family: var(--f-mono); font-size: 12.5px }
+.muted { color: var(--muted) }
+button { font: inherit; cursor: pointer }
+button:focus-visible, input:focus-visible, .row:focus-visible, .kcard:focus-visible, nav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+/* cabecera y navegación */
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px }
+header .brand p { color: var(--muted); font-size: 13px }
+nav { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; flex-wrap: wrap }
+nav a { text-decoration: none; color: var(--ink); padding: 6px 14px; border-radius: 5px; font-weight: 500 }
+nav a[aria-current="page"] { background: var(--accent); color: var(--on-fill) }
+.view[hidden] { display: none }
+.intro { color: var(--muted); max-width: 80ch }
+
+.stats { display: flex; flex-wrap: wrap; gap: 8px }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; min-width: 120px }
+.stat b { display: block; font: 600 22px/1.1 var(--f-display); font-variant-numeric: tabular-nums }
+.stat span { font-size: 12px; color: var(--muted) }
+
+/* ---------- vista cola ---------- */
+.main { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr) } }
+.queue { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: grid; grid-template-rows: auto 1fr; max-height: calc(100vh - 120px); position: sticky; top: 12px; min-width: 0 }
+@media (max-width: 860px) { .queue { position: static; max-height: 46vh } }
+.filters { display: grid; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line) }
+.seg { display: flex; flex-wrap: wrap; gap: 4px }
+.seg button { border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 999px; padding: 3px 10px; font-size: 12.5px }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-fill) }
+.filters input { width: 100%; border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 6px; padding: 6px 10px; font: inherit }
+.list { overflow-y: auto; min-height: 0 }
+.row { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 0 10px; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); cursor: pointer; background: var(--panel) }
+.row:hover { background: var(--soft) }
+.row[aria-current="true"] { background: var(--accent-soft) }
+.row .stripe { grid-row: span 2; border-radius: 0 3px 3px 0 }
+.row .t { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.row .m { font-size: 12px; color: var(--muted); font-family: var(--f-mono); grid-column: 2 }
+.row .d { grid-row: span 2; align-self: center; display: grid; justify-items: end; gap: 3px }
+.count { padding: 8px 12px; font-size: 12px; color: var(--muted) }
+
+.chip { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 500; white-space: nowrap; border: 1px solid var(--line); color: var(--ink); background: var(--panel) }
+.chip .sw { width: 8px; height: 8px; border-radius: 50% }
+.chip.sev { color: var(--on-fill); border-color: transparent }
+.dec { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase }
+.dec.esc { color: var(--sev-critical) } .dec.close { color: var(--muted) }
+.reviewed { color: var(--ok); font-size: 11px }
+
+.detail { display: grid; gap: 12px; min-width: 0 }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; display: grid; gap: 10px; min-width: 0 }
+.head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center }
+.step { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px }
+.step .n { width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 600 13px/26px var(--f-display); text-align: center }
+.step > div { display: grid; gap: 8px; min-width: 0 }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 0 }
+.kv dt { color: var(--muted); font-size: 12.5px }
+.kv dd { margin: 0; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: 12.5px }
+.ents { display: flex; flex-wrap: wrap; gap: 6px }
+.ent { background: var(--soft); border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; font: 12px var(--f-mono); overflow-wrap: anywhere }
+.ent i { font-style: normal; color: var(--muted) }
+.trace { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px }
+.trace li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; padding: 7px 10px; background: var(--soft); border-radius: 5px; transition: opacity .25s }
+.trace li.pending { opacity: .25 }
+.trace .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--ok) }
+.trace .dot.miss { background: var(--sev-medium) }
+.trace .call { font: 12px var(--f-mono); color: var(--accent); overflow-wrap: anywhere }
+.trace .sum { font-size: 13px; overflow-wrap: anywhere }
+.ghost { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 4px 10px; font-size: 12.5px; justify-self: start }
+.verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px }
+.verdict .big { font: 600 20px var(--f-display); display: inline-flex; align-items: center; gap: 8px }
+.verdict .big .sw { width: 12px; height: 12px; border-radius: 50% }
+.conf { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums }
+.conf .bar { width: 110px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
+.conf .bar i { display: block; height: 100%; background: var(--ink) }
+blockquote { margin: 0; padding: 10px 14px; border-left: 3px solid var(--line); background: var(--soft); border-radius: 0 6px 6px 0 }
+.mx-wrap { overflow-x: auto }
+table.mx { border-collapse: separate; border-spacing: 3px; font-size: 12px; font-variant-numeric: tabular-nums }
+.mx th { font-weight: 500; color: var(--muted); padding: 2px 6px; text-align: left; white-space: nowrap }
+.mx td { padding: 5px 8px; border-radius: 4px; background: var(--soft); color: var(--muted); white-space: nowrap; border: 2px solid transparent }
+.mx td.hl { border-color: var(--ink); color: var(--ink); font-weight: 600 }
+.mx tr.hlrow th:first-child, .mx th.hlcol { color: var(--ink); font-weight: 600 }
+.human { display: grid; gap: 10px }
+.human .prop { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center }
+.actions { display: flex; flex-wrap: wrap; gap: 8px }
+.btn { border-radius: 6px; padding: 7px 14px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-fill); font-weight: 500 }
+.btn.alt { background: var(--panel); color: var(--accent) }
+.btn:disabled { opacity: .5; cursor: default }
+.note { font-size: 12.5px; color: var(--muted) }
+.done { color: var(--ok); font-weight: 500 }
+
+/* ---------- vista en directo ---------- */
+.livebar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between }
+.progress { flex: 1 1 220px; max-width: 420px; display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums }
+.progress .track { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden }
+.progress .track i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start }
+@media (max-width: 1000px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+@media (max-width: 560px) { .board { grid-template-columns: minmax(0, 1fr) } }
+.col { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 8px; align-content: start; min-height: 160px; min-width: 0 }
+.col > header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px }
+.col > header b { font: 600 14px var(--f-display) }
+.col > header span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums }
+.col.human-col { border-color: var(--sev-critical); border-style: dashed }
+.col .hint { font-size: 12px; color: var(--muted) }
+.kcard { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--sev-info); border-radius: 6px; padding: 8px 10px; display: grid; gap: 4px; min-width: 0; cursor: pointer; animation: pop .3s ease-out }
+.kcard .t { font-weight: 500; font-size: 13px; line-height: 1.3 }
+.kcard .m { font: 11.5px var(--f-mono); color: var(--muted) }
+.kcard .row2 { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center }
+.kcard.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+.kcard .steps { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font-size: 12px }
+.kcard .steps li { display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 6px; overflow-wrap: anywhere }
+.kcard .steps li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-top: 6px }
+.kcard .steps li.wait::before { background: var(--line) }
+.kcard .steps code { font: 11.5px var(--f-mono); color: var(--accent) }
+@keyframes pop { from { transform: translateY(6px); opacity: .4 } to { transform: none; opacity: 1 } }
+
+/* ---------- vista panel ---------- */
+.dash { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px }
+@media (max-width: 900px) { .dash { grid-template-columns: minmax(0, 1fr) } }
+.dash .wide { grid-column: 1 / -1 }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px }
+@media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 2px }
+.tile b { font: 600 32px/1.1 var(--f-display); font-variant-numeric: tabular-nums }
+.tile span { color: var(--muted); font-size: 13px }
+.tile small { color: var(--muted); font-size: 11.5px }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--muted) }
+.legend span { display: inline-flex; align-items: center; gap: 6px }
+.legend i { width: 10px; height: 10px; border-radius: 2px }
+.split { display: flex; height: 34px; gap: 2px }
+.split div { border-radius: 4px; display: flex; align-items: center; padding: 0 8px; color: var(--on-fill); font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; min-width: 0 }
+.bars { display: grid; grid-template-columns: minmax(90px, 210px) minmax(0, 1fr) 32px; gap: 6px 10px; align-items: center; font-size: 12.5px }
+.bars .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.bars .lab small { color: var(--muted); font-family: var(--f-mono) }
+.bars .bar { display: flex; gap: 2px; height: 16px }
+.bars .bar div { height: 100%; min-width: 2px }
+.bars .bar div:first-child { border-radius: 4px 0 0 4px } .bars .bar div:last-child { border-radius: 0 4px 4px 0 }
+.bars .bar div:only-child { border-radius: 4px }
+.bars .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums }
+.heat { display: grid; grid-template-columns: auto repeat(5, minmax(44px, 1fr)); gap: 3px; font-size: 12px; font-variant-numeric: tabular-nums }
+.heat .h { color: var(--muted); padding: 4px 6px; white-space: nowrap }
+.heat .c { border-radius: 4px; padding: 10px 4px; text-align: center; font-weight: 600 }
+.days { display: flex; align-items: flex-end; gap: 2px; height: 170px; border-bottom: 1px solid var(--line) }
+.days .d { flex: 1 1 0; display: flex; flex-direction: column-reverse; gap: 2px; height: 100%; justify-content: flex-start; min-width: 0 }
+.days .d div:last-child { border-radius: 4px 4px 0 0 }
+.days .d div { min-height: 0 }
+.ticks { display: flex; gap: 2px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums }
+.ticks span { flex: 1 1 0; text-align: center; white-space: nowrap; overflow: visible; min-width: 0 }
+#tip { position: fixed; pointer-events: none; z-index: 20; background: var(--ink); color: var(--panel); font-size: 12px; padding: 6px 9px; border-radius: 5px; max-width: 260px; line-height: 1.4 }
+[data-tip] { cursor: default }
+
+@media (prefers-reduced-motion: reduce) { .trace li, .progress .track i { transition: none } .kcard { animation: none } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Tarvia · Triaje N1</h1>
+      <p>Muestra de desarrollo de Deloitte · reglas deterministas contra la API simulada del SOC · el sistema propone, la persona decide</p>
+    </div>
+    <nav aria-label="Vistas">
+      <a href="#cola" data-view="cola">Cola de triaje</a>
+      <a href="#directo" data-view="directo">En directo</a>
+      <a href="#panel" data-view="panel">Panel</a>
+    </nav>
+  </header>
+
+  <!-- ===== Cola ===== -->
+  <section class="view" id="v-cola">
+    <div class="main">
+      <aside class="queue" aria-label="Cola de alertas">
+        <div class="filters">
+          <div class="seg" id="fDecision" role="group" aria-label="Filtrar por decisión"></div>
+          <div class="seg" id="fVerdict" role="group" aria-label="Filtrar por veredicto"></div>
+          <input id="q" type="search" placeholder="Buscar regla, ID, usuario, host…" aria-label="Buscar">
+        </div>
+        <div class="list" id="list"></div>
+      </aside>
+      <div class="detail" id="detail"></div>
+    </div>
+  </section>
+
+  <!-- ===== En directo ===== -->
+  <section class="view" id="v-directo" hidden>
+    <div class="card">
+      <div class="livebar">
+        <div style="display:grid;gap:4px">
+          <h2>Triaje en directo</h2>
+          <p class="intro">Así verá el jurado las alertas sorpresa: entran en la cola, el sistema consulta la API y decide, y lo que se escala queda esperando a la persona.</p>
+        </div>
+        <div class="progress"><span id="liveTxt">10 alertas en cola</span><div class="track"><i id="liveBar"></i></div></div>
+        <div class="actions">
+          <button class="btn" type="button" id="liveStart">▶ Iniciar triaje</button>
+          <button class="btn alt" type="button" id="liveReset">Reiniciar</button>
+        </div>
+      </div>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <!-- ===== Panel ===== -->
+  <section class="view" id="v-panel" hidden>
+    <div class="dash" id="dash"></div>
+  </section>
+</div>
+<div id="tip" hidden></div>
+
+<script id="data" type="application/json">/*__DATA__*/[]</script>
+<script>
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const BY_ID = Object.fromEntries(DATA.map(r => [r.alert_id, r]));
+const SEV = ["informational", "low", "medium", "high", "critical"];
+const SEV_ES = { informational: "informativa", low: "baja", medium: "media", high: "alta", critical: "crítica" };
+const SEV_VAR = { informational: "--sev-info", low: "--sev-low", medium: "--sev-medium", high: "--sev-high", critical: "--sev-critical" };
+const CRIT = ["Baja", "Media", "Alta", "Crítica"];
+const MATRIX = {
+  informational: ["informational", "informational", "low", "low"], low: ["informational", "low", "low", "medium"],
+  medium: ["low", "medium", "medium", "high"], high: ["medium", "high", "high", "critical"], critical: ["high", "critical", "critical", "critical"],
+};
+// orden fijo de la paleta categórica: azul, naranja, aqua, amarillo
+const VERD_ORDER = ["false_positive", "true_positive", "benign_true_positive", "needs_more_info"];
+const VERD = {
+  false_positive: ["Falso positivo", "--v-fp"], true_positive: ["Verdadero positivo", "--v-tp"],
+  benign_true_positive: ["Benigno autorizado", "--v-btp"], needs_more_info: ["Falta información", "--v-nmi"],
+};
+const ENT_ES = { hosts: "host", users: "usuario", ips: "ip", domains: "dominio", urls: "url", processes: "proceso", customers: "cliente", files: "fichero" };
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const sevChip = s => `<span class="chip sev" style="background:var(${SEV_VAR[s]})">${esc(SEV_ES[s])}</span>`;
+const verdChip = v => `<span class="chip"><span class="sw" style="background:var(${VERD[v][1]})"></span>${esc(VERD[v][0])}</span>`;
+const isEsc = r => r.decision.startsWith("ESCALAR");
+const fmtTime = iso => iso.replace("T", " ").slice(5, 16) + " UTC";
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+
+let REVIEW = {};
+try { REVIEW = JSON.parse(localStorage.getItem("triaje-n1-review") || "{}") } catch (e) { REVIEW = {} }
+const saveReview = () => { try { localStorage.setItem("triaje-n1-review", JSON.stringify(REVIEW)) } catch (e) {} };
+
+/* ======================= COLA ======================= */
+const state = { decision: "all", verdict: "all", q: "", current: null };
+
+function renderFilters() {
+  const dec = [["all", "Todas"], ["esc", "A escalar"], ["close", "A cerrar"]];
+  const ver = [["all", "Cualquier veredicto"], ...VERD_ORDER.map(k => [k, VERD[k][0]])];
+  const seg = (id, opts, key) => {
+    const el = document.getElementById(id);
+    el.innerHTML = opts.map(([k, l]) => `<button type="button" data-k="${k}" aria-pressed="${state[key] === k}">${esc(l)}</button>`).join("");
+    el.onclick = e => { const b = e.target.closest("button"); if (!b) return; state[key] = b.dataset.k; renderFilters(); renderList(); };
+  };
+  seg("fDecision", dec, "decision"); seg("fVerdict", ver, "verdict");
+}
+function filtered() {
+  const q = state.q.toLowerCase();
+  return DATA.filter(r => (state.decision === "all" || (state.decision === "esc") === isEsc(r)) &&
+    (state.verdict === "all" || r.verdict === state.verdict) && (!q || JSON.stringify(r.alert).toLowerCase().includes(q)));
+}
+function renderList() {
+  const rows = filtered();
+  document.getElementById("list").innerHTML = rows.map(r => `
+    <div class="row" role="button" tabindex="0" data-id="${esc(r.alert_id)}" aria-current="${r.alert_id === state.current}">
+      <span class="stripe" style="background:var(${SEV_VAR[r.severity]})"></span>
+      <span class="t">${esc(r.alert.rule_name)}</span>
+      <span class="d">${verdChip(r.verdict)}<span class="dec ${isEsc(r) ? "esc" : "close"}">${isEsc(r) ? "Escalar" : "Cerrar"}</span>${REVIEW[r.alert_id] ? '<span class="reviewed">✓ revisada</span>' : ""}</span>
+      <span class="m">${esc(fmtTime(r.alert.created_at))} · ${esc(r.alert.source_product)}</span>
+    </div>`).join("") + `<div class="count">${rows.length} de ${DATA.length} alertas</div>`;
+}
+function entities(ent) {
+  const out = [];
+  for (const [k, arr] of Object.entries(ent || {})) for (const v of arr || []) {
+    const label = typeof v === "string" ? v : (v.hostname || v.upn || v.name || v.customer_id || v.sha256 || JSON.stringify(v));
+    out.push(`<span class="ent"><i>${esc(ENT_ES[k] || k)}</i> ${esc(label)}</span>`);
+  }
+  return out.join("") || '<span class="muted">sin entidades</span>';
+}
+const evidence = ev => Object.entries(ev || {}).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(typeof v === "object" ? JSON.stringify(v) : v)}</dd>`).join("");
+function matrix(r) {
+  const rule = r.alert.severity, col = CRIT.indexOf(r.asset_criticality);
+  const head = CRIT.map((c, i) => `<th class="${i === col ? "hlcol" : ""}">${esc(c)}</th>`).join("");
+  const body = SEV.map(s => `<tr class="${s === rule ? "hlrow" : ""}"><th>${esc(SEV_ES[s])}</th>${MATRIX[s].map((v, i) =>
+    `<td class="${s === rule && i === col ? "hl" : ""}">${esc(SEV_ES[v])}</td>`).join("")}</tr>`).join("");
+  return `<div class="mx-wrap"><table class="mx" aria-label="Matriz de severidad de la política"><thead><tr><th>Regla ↓ · Activo →</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+function renderDetail(id, animate) {
+  const r = BY_ID[id]; if (!r) return;
+  state.current = id;
+  document.querySelectorAll(".row").forEach(x => x.setAttribute("aria-current", x.dataset.id === id));
+  const a = r.alert, rev = REVIEW[id];
+  const proposed = isEsc(r) ? "Escalar a N2" : "Cerrar", other = isEsc(r) ? "Cerrar" : "Escalar a N2";
+  document.getElementById("detail").innerHTML = `
+    <section class="card">
+      <div class="head">${sevChip(r.severity)} <span class="mono muted">${esc(a.alert_id)}</span>
+        <span class="muted">${esc(fmtTime(a.created_at))} · ${esc(a.source_product)} · ${esc(a.rule_id)} · runbook ${esc(a.runbook)}</span></div>
+      <h2>${esc(a.rule_name)}</h2>
+      <div class="muted">${esc(a.mitre?.tactic)} · ${esc(a.mitre?.technique_id)} ${esc(a.mitre?.technique)}</div>
+    </section>
+    <section class="card step"><span class="n">1</span><div>
+      <h3>Qué detectó la regla</h3><div>${esc(a.description)}</div>
+      <div class="ents">${entities(a.entities)}</div><dl class="kv">${evidence(a.evidence)}</dl>
+    </div></section>
+    <section class="card step"><span class="n">2</span><div>
+      <h3>Qué consultó el sistema a la API del SOC</h3>
+      <ul class="trace" id="trace">${r.trace.map(t => `
+        <li class="${animate ? "pending" : ""}"><span class="dot ${t.ok ? "" : "miss"}"></span>
+          <div><div class="call">${esc(t.call)}</div><div class="sum">${esc(t.summary)}</div></div></li>`).join("")
+        || '<li><span></span><div class="sum muted">Ninguna consulta: la alerta no trae entidades consultables.</div></li>'}</ul>
+      <button class="ghost" type="button" id="replay">▶ Repetir la investigación</button>
+    </div></section>
+    <section class="card step"><span class="n">3</span><div>
+      <h3>Veredicto</h3>
+      <div class="verdict"><span class="big"><span class="sw" style="background:var(${VERD[r.verdict][1]})"></span>${esc(VERD[r.verdict][0])}</span>
+        <span class="conf">confianza <span class="bar"><i style="width:${r.confidence * 100}%"></i></span> ${Math.round(r.confidence * 100)}%</span>
+        <span class="mono muted">regla ${esc(r.rule_logic)}()</span></div>
+      <blockquote>${esc(r.justification)}</blockquote>
+    </div></section>
+    <section class="card step"><span class="n">4</span><div>
+      <h3>Severidad final (matriz §2 de la política)</h3>
+      <div class="head">${sevChip(r.severity)} <span class="muted">${esc(r.severity_rationale)}</span></div>
+      ${matrix(r)}
+      <div class="note">Fila: severidad de la regla (${esc(SEV_ES[a.severity])}). Columna: criticidad del activo más crítico (${esc(r.asset_criticality)}; «Media» si no está en la CMDB).</div>
+    </div></section>
+    <section class="card step"><span class="n">5</span><div class="human">
+      <h3>Decisión de la persona</h3>
+      <div class="prop">El sistema propone: <span class="dec ${isEsc(r) ? "esc" : "close"}" style="font-size:13px">${proposed}</span></div>
+      ${rev ? `<div class="done">✓ Revisada: ${esc(rev)}</div>` : ""}
+      <div class="actions">
+        <button class="btn" type="button" data-dec="${esc(proposed)}">Aceptar: ${proposed}</button>
+        <button class="btn alt" type="button" data-dec="${esc(other)}">Corregir: ${other}</button>
+        ${rev ? '<button class="ghost" type="button" data-dec="">Deshacer</button>' : ""}
+      </div>
+      <div class="note">El N1 automático no ejecuta ninguna contención. La revisión se guarda solo en este navegador.</div>
+    </div></section>`;
+  document.getElementById("replay").onclick = () => renderDetail(id, true);
+  document.querySelectorAll("[data-dec]").forEach(b => b.onclick = () => {
+    if (b.dataset.dec) REVIEW[id] = b.dataset.dec; else delete REVIEW[id];
+    saveReview(); renderList(); renderDetail(id);
+  });
+  if (animate) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.querySelectorAll("#trace li.pending").forEach((li, i) => setTimeout(() => li.classList.remove("pending"), reduce ? 0 : 350 * (i + 1)));
+  }
+}
+document.getElementById("list").addEventListener("click", e => { const row = e.target.closest(".row"); if (row) go(row.dataset.id, true) });
+document.getElementById("list").addEventListener("keydown", e => {
+  const row = e.target.closest(".row"); if (row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); go(row.dataset.id, true) }
+});
+document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; renderList() });
+
+/* ======================= EN DIRECTO ======================= */
+// 10 alertas variadas: 5 que el sistema cierra y 5 que escala, cada una de una regla distinta
+const LIVE = (() => {
+  const seen = new Set(), pick = [];
+  for (const wantEsc of [false, true]) {
+    let k = 0;
+    for (const r of DATA) if (isEsc(r) === wantEsc && !seen.has(r.alert.rule_id) && k < 5) { seen.add(r.alert.rule_id); pick.push(r); k++ }
+  }
+  return pick.sort((a, b) => a.alert.created_at.localeCompare(b.alert.created_at)).map(r => r.alert_id);
+})();
+const live = { pos: {}, active: null, timer: null, done: 0, running: false };
+const COLS = [
+  ["in", "Entrantes", "Alertas del SIEM esperando triaje"],
+  ["work", "Investigando", "El sistema consulta la API del SOC"],
+  ["close", "Cerradas por el sistema", "Con veredicto y justificación"],
+  ["esc", "Esperan a la persona", "Escaladas a N2: decide un analista"],
+];
+function liveReset() {
+  clearTimeout(live.timer); live.running = false; live.done = 0; live.active = null; live.step = 0;
+  LIVE.forEach(id => live.pos[id] = "in"); renderBoard();
+}
+function kcard(id) {
+  const r = BY_ID[id], a = r.alert, where = live.pos[id];
+  const resolved = where === "close" || where === "esc";
+  let steps = "";
+  if (where === "work") {
+    const calls = r.trace.map(t => `<li${live.step > 0 ? "" : ' class="wait"'}><span><code>${esc(t.call)}</code><br>${esc(t.summary)}</span></li>`);
+    const shown = calls.slice(0, Math.max(0, live.step));
+    steps = `<ul class="steps"><li><span>Entender: ${esc(a.description)}</span></li>${shown.join("")}${
+      live.step > r.trace.length ? `<li><span>Decidir: ${esc(VERD[r.verdict][0])} · severidad ${esc(SEV_ES[r.severity])}</span></li>` : '<li class="wait"><span>…</span></li>'}</ul>`;
+  }
+  return `<div class="kcard${where === "work" ? " active" : ""}" tabindex="0" data-id="${esc(id)}" style="border-left-color:var(${resolved ? SEV_VAR[r.severity] : "--sev-info"})">
+    <div class="t">${esc(a.rule_name)}</div>
+    <div class="m">${esc(a.alert_id)} · ${esc(a.source_product)} · regla ${esc(SEV_ES[a.severity])}</div>
+    ${resolved ? `<div class="row2">${verdChip(r.verdict)}${sevChip(r.severity)}</div>` : ""}
+    ${resolved && where === "esc" ? `<div class="m" style="color:var(--ink)">${esc(r.justification.slice(0, 110))}${r.justification.length > 110 ? "…" : ""}</div>` : ""}
+    ${steps}</div>`;
+}
+function renderBoard() {
+  document.getElementById("board").innerHTML = COLS.map(([k, name, hint]) => {
+    const ids = LIVE.filter(id => live.pos[id] === k);
+    return `<div class="col${k === "esc" ? " human-col" : ""}"><header><b>${name}</b><span>${ids.length}</span></header>
+      <div class="hint">${hint}</div>${ids.map(kcard).join("")}</div>`;
+  }).join("");
+  document.getElementById("liveTxt").textContent = live.done === LIVE.length
+    ? `${LIVE.length} alertas triadas · ${LIVE.filter(id => live.pos[id] === "esc").length} esperan a la persona`
+    : `${live.done} de ${LIVE.length} alertas triadas`;
+  document.getElementById("liveBar").style.width = pct(live.done, LIVE.length) + "%";
+  document.getElementById("liveStart").disabled = live.running || live.done === LIVE.length;
+}
+function liveTick() {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches, d = reduce ? 150 : 600;
+  if (!live.active) {
+    const next = LIVE.find(id => live.pos[id] === "in");
+    if (!next) { live.running = false; renderBoard(); return }
+    live.active = next; live.pos[next] = "work"; live.step = 0;
+  } else {
+    const r = BY_ID[live.active];
+    if (live.step <= r.trace.length) live.step++;
+    else { live.pos[live.active] = isEsc(r) ? "esc" : "close"; live.active = null; live.done++ }
+  }
+  renderBoard();
+  live.timer = setTimeout(liveTick, d);
+}
+document.getElementById("liveStart").onclick = () => { if (!live.running) { live.running = true; liveTick() } };
+document.getElementById("liveReset").onclick = liveReset;
+document.getElementById("board").addEventListener("click", e => { const c = e.target.closest(".kcard"); if (c) go(c.dataset.id, true) });
+document.getElementById("board").addEventListener("keydown", e => { const c = e.target.closest(".kcard"); if (c && e.key === "Enter") go(c.dataset.id, true) });
+
+/* ======================= PANEL ======================= */
+const MIN_PER_ALERT = 8; // supuesto: minutos de un analista N1 por alerta triada a mano
+function renderDash() {
+  const n = DATA.length, escN = DATA.filter(isEsc).length, closed = n - escN;
+  const tp = DATA.filter(r => r.verdict === "true_positive").length;
+  const byV = Object.fromEntries(VERD_ORDER.map(v => [v, DATA.filter(r => r.verdict === v).length]));
+  const legend = `<div class="legend">${VERD_ORDER.map(v => `<span><i style="background:var(${VERD[v][1]})"></i>${VERD[v][0]}</span>`).join("")}</div>`;
+
+  // reglas: top 9 + otras
+  const rules = {};
+  DATA.forEach(r => { const k = r.alert.rule_id; (rules[k] ||= { name: r.alert.rule_name, rows: [] }).rows.push(r) });
+  let rl = Object.entries(rules).sort((a, b) => b[1].rows.length - a[1].rows.length);
+  if (rl.length > 10) {
+    const rest = rl.slice(9).flatMap(([, v]) => v.rows);
+    rl = [...rl.slice(0, 9), ["", { name: `Otras ${rl.length - 9} reglas`, rows: rest }]];
+  }
+  const max = Math.max(...rl.map(([, v]) => v.rows.length));
+  const barsHtml = rl.map(([id, v]) => {
+    const segs = VERD_ORDER.map(vd => [vd, v.rows.filter(r => r.verdict === vd).length]).filter(([, c]) => c);
+    const total = v.rows.length;
+    return `<div class="lab" title="${esc(v.name)}">${esc(v.name)} ${id ? `<small>${esc(id)}</small>` : ""}</div>
+      <div class="bar" style="width:${100 * total / max}%">${segs.map(([vd, c]) =>
+        `<div style="flex:${c};background:var(${VERD[vd][1]})" data-tip="${esc(v.name)}<br><b>${c}</b> ${esc(VERD[vd][0].toLowerCase())}"></div>`).join("")}</div>
+      <div class="n">${total}</div>`;
+  }).join("");
+
+  // mapa de calor: severidad de la regla (filas) × severidad final (columnas)
+  const ruleSevs = SEV.filter(s => DATA.some(r => r.alert.severity === s));
+  const hm = {}; let hmMax = 0;
+  DATA.forEach(r => { const k = r.alert.severity + "|" + r.severity; hm[k] = (hm[k] || 0) + 1; hmMax = Math.max(hmMax, hm[k]) });
+  const step = c => c ? Math.min(6, 1 + Math.floor(5 * c / hmMax)) : 0;
+  const heat = `<div class="h"></div>${SEV.map(s => `<div class="h">${SEV_ES[s]}</div>`).join("")}` +
+    ruleSevs.map(rs => `<div class="h">regla ${SEV_ES[rs]}</div>` + SEV.map(fs => {
+      const c = hm[rs + "|" + fs] || 0, st = step(c);
+      return `<div class="c" style="background:var(--q${st});color:${st >= 4 ? "var(--on-fill)" : "var(--ink)"}" data-tip="Regla ${SEV_ES[rs]} → final ${SEV_ES[fs]}<br><b>${c}</b> alertas">${c || ""}</div>`;
+    }).join("")).join("");
+  const down = DATA.filter(r => SEV.indexOf(r.severity) < SEV.indexOf(r.alert.severity)).length;
+  const up = DATA.filter(r => SEV.indexOf(r.severity) > SEV.indexOf(r.alert.severity)).length;
+
+  // alertas por día, apiladas por decisión
+  const days = {};
+  DATA.forEach(r => { const d = r.alert.created_at.slice(0, 10); (days[d] ||= { c: 0, e: 0 })[isEsc(r) ? "e" : "c"]++ });
+  const first = new Date(Object.keys(days).sort()[0]), last = new Date(Object.keys(days).sort().at(-1));
+  const dayList = [];
+  for (let d = new Date(first); d <= last; d.setUTCDate(d.getUTCDate() + 1)) dayList.push(d.toISOString().slice(0, 10));
+  const dMax = Math.max(...dayList.map(d => (days[d]?.c || 0) + (days[d]?.e || 0)));
+  const fmtD = d => d.slice(8, 10) + "/" + d.slice(5, 7);
+  const cols = dayList.map(d => {
+    const v = days[d] || { c: 0, e: 0 };
+    return `<div class="d" data-tip="${fmtD(d)}<br><b>${v.c}</b> cerradas · <b>${v.e}</b> escaladas">
+      ${v.c ? `<div style="height:${100 * v.c / dMax}%;background:var(--v-fp)"></div>` : ""}
+      ${v.e ? `<div style="height:${100 * v.e / dMax}%;background:var(--v-tp)"></div>` : ""}</div>`;
+  }).join("");
+  const ticks = dayList.map((d, i) => `<span>${i % 7 === 0 ? fmtD(d) : ""}</span>`).join("");
+
+  document.getElementById("dash").innerHTML = `
+    <div class="tiles wide">
+      <div class="tile"><b>${n}</b><span>alertas triadas</span><small>muestra de desarrollo</small></div>
+      <div class="tile"><b>${pct(closed, n)}%</b><span>cerradas por el sistema</span><small>${closed} con veredicto y justificación</small></div>
+      <div class="tile"><b>${escN}</b><span>escaladas a N2</span><small>${tp} verdaderos positivos en total</small></div>
+      <div class="tile"><b>${(closed * MIN_PER_ALERT / 60).toFixed(1)} h</b><span>de analista ahorradas</span><small>supuesto: ${MIN_PER_ALERT} min por alerta manual</small></div>
+    </div>
+    <section class="card wide"><h3>Qué ha decidido el sistema</h3>${legend}
+      <div class="split">${VERD_ORDER.filter(v => byV[v]).map(v =>
+        `<div style="flex:${byV[v]};background:var(${VERD[v][1]})" data-tip="${VERD[v][0]}<br><b>${byV[v]}</b> alertas (${pct(byV[v], n)}%)">${byV[v] >= 10 ? pct(byV[v], n) + "%" : ""}</div>`).join("")}</div>
+    </section>
+    <section class="card wide"><h3>Veredicto por regla de detección</h3>
+      <p class="note">Las reglas más ruidosas se cierran con argumentos; las raras acaban en «falta información» y se escalan.</p>${legend}
+      <div class="bars">${barsHtml}</div></section>
+    <section class="card"><h3>Severidad de la regla frente a severidad final</h3>
+      <p class="note">${down} alertas bajan de severidad al aplicar la matriz con el contexto, ${up} suben. La severidad de la regla no es la final.</p>
+      <div class="mx-wrap"><div class="heat">${heat}</div></div></section>
+    <section class="card"><h3>Alertas por día</h3>
+      <div class="legend"><span><i style="background:var(--v-fp)"></i>Cerradas por el sistema</span><span><i style="background:var(--v-tp)"></i>Escaladas a N2</span></div>
+      <div class="days">${cols}</div><div class="ticks">${ticks}</div></section>`;
+}
+
+/* tooltip compartido */
+const tip = document.getElementById("tip");
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest("[data-tip]");
+  if (!t) { tip.hidden = true; return }
+  tip.innerHTML = t.dataset.tip; tip.hidden = false;
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+});
+
+/* ======================= RUTAS ======================= */
+// La navegación no depende de hashchange: el hash solo se usa para enlaces compartibles.
+function go(target, animate) {
+  try { history.replaceState(null, "", "#" + target) } catch (e) {}
+  route(target, animate);
+}
+function route(h, animate) {
+  const view = BY_ID[h] ? "cola" : (["cola", "directo", "panel"].includes(h) ? h : "cola");
+  document.querySelectorAll(".view").forEach(v => v.hidden = v.id !== "v-" + view);
+  document.querySelectorAll("nav a").forEach(a => a.setAttribute("aria-current", a.dataset.view === view ? "page" : "false"));
+  if (view === "cola") {
+    renderList();
+    const id = BY_ID[h] ? h : (state.current || (DATA.find(r => isEsc(r) && r.verdict === "true_positive") || DATA[0]).alert_id);
+    renderDetail(id, animate);
+  }
+  scrollTo(0, 0);
+}
+document.querySelector("nav").addEventListener("click", e => {
+  const a = e.target.closest("a[data-view]"); if (!a) return;
+  e.preventDefault(); go(a.dataset.view);
+});
+window.addEventListener("hashchange", () => route(location.hash.slice(1)));
+renderFilters(); renderDash(); liveReset(); route(location.hash.slice(1));
+</script>

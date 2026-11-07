@@ -1,0 +1,28 @@
+# Tema común (dueño: persona A). Línea visual inspirada en la de Deloitte (reto Deloitte × UAB):
+# negro y blanco, azul petróleo para lo interactivo, verde Deloitte solo como acento, Open Sans.
+# Colores de datos (conclusión, gravedad) NO van aquí: están en core/ui.py.
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#1076a8"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f5"
+textColor = "#000000"
+linkColor = "#1076a8"
+borderColor = "#e3e3e3"
+showWidgetBorder = true
+baseRadius = "0.5rem"
+font = "Open Sans:https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap"
+headingFont = "Open Sans:https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+headingFontWeights = [300, 400, 600]
+
+[theme.sidebar]
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#1a1a1a"
+textColor = "#ffffff"
+borderColor = "#333333"
+primaryColor = "#86bc25"

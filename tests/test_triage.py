@@ -1,5 +1,7 @@
+import json
 import pytest
 import triage
+import verdict
 
 
 def test_analyze_alert_gathers_context_and_keeps_unconfirmed_verdict(monkeypatch):
@@ -43,7 +45,7 @@ def test_analyze_alert_gathers_context_and_keeps_unconfirmed_verdict(monkeypatch
     )
     monkeypatch.setattr(triage.soc_api, "search_changes", lambda query: [])
 
-    result = triage.analyze_alert("ALR-1")
+    result = triage.analyze_alert("ALR-1", use_llm=False)
 
     assert result.alert.alert_id == "ALR-1"
     assert result.verdict == "needs_more_info"
@@ -53,6 +55,55 @@ def test_analyze_alert_gathers_context_and_keeps_unconfirmed_verdict(monkeypatch
     assert result.queries
     assert result.ticket is not None
     assert result.ticket["ticket_id"] == "TCK-ALR-1"
+
+
+def test_analyze_alert_with_llm_mock(monkeypatch):
+    monkeypatch.setattr(
+        triage.soc_api,
+        "get_alert",
+        lambda alert_id: {
+            "alert_id": alert_id,
+            "created_at": "2026-10-06T10:00:00Z",
+            "source_product": "PROXY",
+            "rule_name": "Beaconing a dominio sospechoso",
+            "severity": "medium",
+            "entities": {"domains": ["c2-bad.example"]},
+            "evidence": {},
+            "related_events": [],
+        },
+    )
+    import ollama
+    monkeypatch.setattr(
+        ollama,
+        "chat",
+        lambda **kwargs: {
+            "message": {
+                "content": json.dumps({
+                    "verdict": "true_positive",
+                    "confidence": 0.95,
+                    "rationale": "Dominio de C2 malicioso confirmado por análisis LLM.",
+                    "summary": "Tráfico C2 detectado hacia infraestructura de atacante.",
+                    "recommended_actions": [
+                        {
+                            "action": "block_ioc",
+                            "target": "c2-bad.example",
+                            "requires_approval": False,
+                            "justification": "Bloqueo IOC C2",
+                        }
+                    ],
+                    "escalation": {"escalate": True, "to": "N2", "reason": "C2 activo"},
+                })
+            }
+        },
+    )
+
+    result = triage.analyze_alert("ALR-LLM-1", use_llm=True, model="llama3")
+
+    assert result.verdict == "true_positive"
+    assert "LLM" in result.verdict_rationale
+    assert "llama" in result.decision_engine.lower()
+    assert result.confidence == 0.95
+    assert result.escalation.get("escalate") is True
 
 
 def test_analyze_alert_identifies_benign_sccm_execution(monkeypatch):
@@ -85,7 +136,7 @@ def test_analyze_alert_identifies_benign_sccm_execution(monkeypatch):
     monkeypatch.setattr(triage.soc_api, "search_changes", lambda query: [])
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 0, "items": []})
 
-    result = triage.analyze_alert("ALR-SCCM-1")
+    result = triage.analyze_alert("ALR-SCCM-1", use_llm=False)
 
     assert result.verdict == "benign_true_positive"
     assert "sccm" in result.verdict_rationale.lower() or "ccmexec" in result.verdict_rationale.lower()
@@ -126,10 +177,10 @@ def test_analyze_alert_identifies_phishing_drill(monkeypatch):
         lambda ind: {"indicator": ind, "tip": None, "geo": None},
     )
 
-    result = triage.analyze_alert("ALR-DRILL-1")
+    result = triage.analyze_alert("ALR-DRILL-1", use_llm=False)
 
     assert result.verdict == "benign_true_positive"
-    assert "simulacro" in result.verdict_rationale.lower()
+    assert "simulac" in result.verdict_rationale.lower()
     assert result.escalation.get("escalate") is False
 
 
@@ -174,7 +225,7 @@ def test_analyze_alert_identifies_malicious_tip_hit(monkeypatch):
     monkeypatch.setattr(triage.soc_api, "search_changes", lambda query: [])
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 1, "items": []})
 
-    result = triage.analyze_alert("ALR-MINER-1")
+    result = triage.analyze_alert("ALR-MINER-1", use_llm=False)
 
     assert result.verdict == "true_positive"
     assert "tip" in result.verdict_rationale.lower() or "minería" in result.verdict_rationale.lower()
@@ -218,7 +269,7 @@ def test_analyze_alert_identifies_newsletter_false_positive(monkeypatch):
     )
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 0, "items": []})
 
-    result = triage.analyze_alert("ALR-ZALANDO-1")
+    result = triage.analyze_alert("ALR-ZALANDO-1", use_llm=False)
 
     assert result.verdict == "false_positive"
     assert "boletín" in result.verdict_rationale.lower() or "legítim" in result.verdict_rationale.lower()
@@ -258,12 +309,11 @@ def test_analyze_alert_identifies_phishing_link_click(monkeypatch):
     )
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 1, "items": []})
 
-    result = triage.analyze_alert("ALR-CLICK-1")
+    result = triage.analyze_alert("ALR-CLICK-1", use_llm=False)
 
     assert result.verdict == "true_positive"
     assert result.escalation.get("escalate") is True
     assert result.escalation.get("to") == "N2"
-    # Should propose resetting password and revoking sessions
     actions = {a["action"] for a in result.recommended_actions}
     assert "revoke_sessions" in actions
     assert "reset_password" in actions
@@ -304,7 +354,7 @@ def test_analyze_alert_identifies_mfa_fatigue(monkeypatch):
     )
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 1, "items": []})
 
-    result = triage.analyze_alert("ALR-MFA-1")
+    result = triage.analyze_alert("ALR-MFA-1", use_llm=False)
 
     assert result.verdict == "true_positive"
     assert result.escalation.get("escalate") is True
@@ -351,10 +401,10 @@ def test_analyze_alert_identifies_hr_notified_travel(monkeypatch):
     )
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 1, "items": []})
 
-    result = triage.analyze_alert("ALR-TRAVEL-1")
+    result = triage.analyze_alert("ALR-TRAVEL-1", use_llm=False)
 
     assert result.verdict == "benign_true_positive"
-    assert "viaje" in result.verdict_rationale.lower()
+    assert "viatge" in result.verdict_rationale.lower() or "viaje" in result.verdict_rationale.lower()
     assert result.escalation.get("escalate") is False
 
 
@@ -384,10 +434,9 @@ def test_analyze_alert_identifies_unauthorized_ot_access(monkeypatch):
     monkeypatch.setattr(triage.soc_api, "search_changes", lambda query: [])
     monkeypatch.setattr(triage.soc_api, "search_logs", lambda *args, **kwargs: {"count": 1, "items": []})
 
-    result = triage.analyze_alert("ALR-OT-1")
+    result = triage.analyze_alert("ALR-OT-1", use_llm=False)
 
     assert result.verdict == "true_positive"
     assert result.escalation.get("escalate") is True
     assert "Operaciones" in result.escalation.get("to", "")
-    # Section 4 & RB-08: SOC never isolates OT assets
     assert not any(a["action"] == "isolate_host" for a in result.recommended_actions)

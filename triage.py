@@ -81,7 +81,7 @@ def _criticality_rank(value: str) -> int:
 
 def analyze_alert(
     alert_id: str,
-    use_llm: bool = False,
+    use_llm: bool = True,
     model: str = "llama3",
 ) -> TriagePreview:
     """Collect bounded SOC evidence and return triaged result with verdict."""
@@ -295,6 +295,7 @@ def analyze_alert(
         recommended_actions=verdict_res.recommended_actions,
         escalation=verdict_res.escalation,
         summary=verdict_res.summary,
+        detailed_analysis=verdict_res.detailed_analysis,
         mitre=verdict_res.mitre,
         decision_engine=verdict_res.decision_engine,
         ticket=ticket,

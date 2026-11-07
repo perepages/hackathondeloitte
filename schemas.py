@@ -54,6 +54,7 @@ class TriagePreview(BaseModel):
     recommended_actions: list[dict[str, Any]] = Field(default_factory=list)
     escalation: dict[str, Any] = Field(default_factory=lambda: {"escalate": False, "to": None, "reason": ""})
     summary: str = ""
+    detailed_analysis: str = ""
     mitre: list[str] = Field(default_factory=list)
     decision_engine: str = "rules"
     ticket: dict[str, Any] | None = None
