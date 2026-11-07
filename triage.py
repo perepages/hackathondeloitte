@@ -245,9 +245,6 @@ def analyze_alert(alert_id: str) -> TriagePreview:
 
     if not related_logs:
         open_questions.append("Corroborar si hubo actividad posterior o impacto efectivo.")
-    open_questions.append(
-        "El veredicto queda en needs_more_info: esta primera versión no usa todavía un LLM ni sustituye al analista."
-    )
 
     return TriagePreview(
         alert=alert,
