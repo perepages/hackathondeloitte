@@ -101,15 +101,14 @@ def test_cola_bandeja_y_ficha():
     assert any("enganyar el sistema" in e.value for e in at.error)
 
 
-def test_contencion_tarjetas():
-    """Acciones de respuesta: se elige la alerta con tarjetas, sin desplegable."""
+def test_contencion_lista_con_desplegables():
+    """Acciones de respuesta: una fila (desplegable) por alerta y sus acciones dentro."""
     at = AppTest.from_file(APP, default_timeout=30).run()
     at.switch_page("views/contencion.py").run()
     assert not at.exception, at.exception
-    btns = [b for b in at.button if b.key and b.key.startswith("contencion_pick_btn_") and not b.disabled]
-    assert btns
-    btns[0].click().run()
-    assert not at.exception, at.exception
+    assert len(at.expander) >= 2
+    assert all("proposad" in e.label for e in at.expander)  # «N accions proposades» en cada fila
+    assert any(b.key and b.key.startswith("contencion_") for b in at.expander[0].button)
 
 
 def test_menu_de_la_demo_sin_paginas_internas(monkeypatch):

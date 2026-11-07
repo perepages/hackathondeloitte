@@ -52,6 +52,21 @@ def injection_flags(alert: dict) -> list[dict]:
 
 # ----------------------------------------------------------------------------- reglas (red de seguridad)
 
+PLAIN = [  # lo que la IA a veces copia de sus instrucciones, dicho como lo ve la persona
+    (r"\bbenign_true_positive\b", "activitat autoritzada"), (r"\btrue_positive\b", "atac real"),
+    (r"\bfalse_positive\b", "falsa alarma"), (r"\bneeds_more_info\b", "falta informació"),
+    (r"\s*\(?\s*cubre_esta_alerta\s*[=:]?\s*(false|fals)\s*\)?", " (no cobreix aquesta alerta)"),
+    (r"\s*\(?\s*cubre_esta_alerta\s*[=:]?\s*(true|cert)\s*\)?", " (cobreix aquesta alerta)"),
+    (r"\bseverity_adjustment\b", "ajust de gravetat"), (r"\bcambios_aprobados\b", "canvis aprovats"),
+]
+
+
+def plain_text(text: str) -> str:
+    for pattern, repl in PLAIN:
+        text = re.sub(pattern, repl, text, flags=re.I)
+    return re.sub(r"\s{2,}", " ", text)
+
+
 def blocked_by_control(alert: dict) -> bool:
     """Política §2, −1: un control lo bloqueó antes de producir efecto (WAF blocked, AV quarantined sin ejecución)."""
     ev = alert.get("evidence") or {}
@@ -108,7 +123,7 @@ def llm_proposal(preview: dict) -> dict:
         adjustment = 0
     decision = raw.get("decision") if raw.get("decision") in ("close", "escalate") else None
     actions = raw.get("recommended_actions") if isinstance(raw.get("recommended_actions"), list) else []
-    text = lambda k: str(raw.get(k) or "").strip()  # noqa: E731
+    text = lambda k: plain_text(str(raw.get(k) or "").strip())  # noqa: E731
     return {"verdict": verdict, "confidence": confidence, "severity_adjustment": adjustment, "decision": decision,
             "title": text("title"), "summary": text("summary"), "justification": text("justification"),
             "recommended_actions": actions, "injection_detected": raw.get("injection_detected") is True}

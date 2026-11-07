@@ -521,7 +521,7 @@
    "No hi ha resultat d'intel·ligència per a execute-api.eu-west-1.amazonaws.com; això no confirma que sigui benigne."
   ],
   "confidence": 0.88,
-  "justification": "La consulta DNS apunta a un subdomini de execute-api.eu-west-1.amazonaws.com, un CDN/cloud legítim (amazonaws.com). Segons la política del SOC, un subdomini aleatori d'un servei cloud legítim és un patró normal i es classifica com a false_positive, sempre que no hi hagi intel·ligència maliciosa. En aquest cas, ni el subdomini concret ni el domini parent tenen resultat d'intel·ligència maliciosa, i la resposta DNS (198.18.10.204) és una resolució normal sense acció posterior. La regla ha detectat alta entropia en un nom generat automàticament per AWS, però això no constitueix un veritable algoritme de generació de dominis malicioso.",
+  "justification": "La consulta DNS apunta a un subdomini de execute-api.eu-west-1.amazonaws.com, un CDN/cloud legítim (amazonaws.com). Segons la política del SOC, un subdomini aleatori d'un servei cloud legítim és un patró normal i es classifica com a falsa alarma, sempre que no hi hagi intel·ligència maliciosa. En aquest cas, ni el subdomini concret ni el domini parent tenen resultat d'intel·ligència maliciosa, i la resposta DNS (198.18.10.204) és una resolució normal sense acció posterior. La regla ha detectat alta entropia en un nom generat automàticament per AWS, però això no constitueix un veritable algoritme de generació de dominis malicioso.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -6239,7 +6239,7 @@
   "severity_rationale": "Matriu del SOC: regla alta × criticitat Mitjana de l'actiu WS-BCN-1770 = alta. Ajustos: +1 execució o accés confirmat; total +1 (màxim ±1) → crítica.",
   "open_questions": [],
   "confidence": 0.98,
-  "justification": "Concordància total entre intel·ligència (reputació maliciosa, confidence 85, tags c2/loader) i sandbox (verdict malicious, scores 96 i 98, famílies Latrodectus). L'arbre de processos mostra executió real: explorer.exe > wscript.exe > msiexec.exe > rundll32.exe, amb descàrrega d'un DLL sense firma (upd_x64.dll) i clau de persistència configurada. No hi ha cap canvi aprovat que cobreixi aquesta alerta i el domini no és un CDN ni servei legítim. Es tracta d'una infecció activa amb persistència, per tant true_positive amb ajust +1.",
+  "justification": "Concordància total entre intel·ligència (reputació maliciosa, confidence 85, tags c2/loader) i sandbox (verdict malicious, scores 96 i 98, famílies Latrodectus). L'arbre de processos mostra executió real: explorer.exe > wscript.exe > msiexec.exe > rundll32.exe, amb descàrrega d'un DLL sense firma (upd_x64.dll) i clau de persistència configurada. No hi ha cap canvi aprovat que cobreixi aquesta alerta i el domini no és un CDN ni servei legítim. Es tracta d'una infecció activa amb persistència, per tant atac real amb ajust +1.",
   "decision": "escalate",
   "recommended_actions": [
    {
@@ -7603,7 +7603,7 @@
   "severity_rationale": "Matriu del SOC: regla baixa × criticitat Crítica de l'actiu WEB-ECOM01 (frontal de la botiga en línia, servei «Tienda online y app») = mitjana. Ajustos: −1 bloquejat per un control sense activitat posterior; total -1 (màxim ±1) → baixa.",
   "open_questions": [],
   "confidence": 0.9,
-  "justification": "Hi ha un indici concret d'activitat maliciosa: una firma SQLi reals (regla 942100 de libinjection) amb 13 xocs bloquejats contra un actiu crític (frontal de botiga en línia, ≈38% de la facturació). Tot i que l'intent està bloquejat i no hi ha activitat posterior, la política estableix que un intento bloquejat sense executió és true_positive amb un ajust de -1. El canvi aprovat CHG-2026-1042 no justifica la detecció perquè cobre_esta_alerta és false i les IPs d'origen no encaixen amb l'alcance autoritzat.",
+  "justification": "Hi ha un indici concret d'activitat maliciosa: una firma SQLi reals (regla 942100 de libinjection) amb 13 xocs bloquejats contra un actiu crític (frontal de botiga en línia, ≈38% de la facturació). Tot i que l'intent està bloquejat i no hi ha activitat posterior, la política estableix que un intento bloquejat sense executió és atac real amb un ajust de -1. El canvi aprovat CHG-2026-1042 no justifica la detecció perquè cobre_esta_alerta és false i les IPs d'origen no encaixen amb l'alcance autoritzat.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -8574,7 +8574,7 @@
   "severity_rationale": "Matriu del SOC: regla alta × criticitat Mitjana de l'actiu LT-T23-01 (lloc de treball de sergio.navarro@tarvia.example) = alta. Ajustos: +1 execució o accés confirmat; total +1 (màxim ±1) → crítica.",
   "open_questions": [],
   "confidence": 0.85,
-  "justification": "La regla detecta més de 10 notacions MFA en menys de 15 minuts (T1621, Multi-Factor Authentication Request Generation), una tècnica típica d'atacant que intenta forçar l'aprovació d'una sessió. Les evidencies mostren 27 sol·licituds en 9 minuts, cinc intents de sessió al Portal de l'empleat amb resultats de fallida (denegats o en temps esgotat) des de la mateixa IP, i final_result: approved, cosa que confirma l'execució i l'èxit de l'accés, no un simple resolució DNS ni connexió. La IP 198.51.100.201 no té intel·ligència maliciosa explícita però és una sortida de VPN comercial reconeguda; això no elimina l'activitat maliciosa, ja que l'atacant pot usar una VPN legítima. No hi ha canys aprovats que autoritzin aquesta activitat. Donat que hi ha confirmació d'accés i possible robatori de credencials, es considera true_positive amb ajust de severitat +1.",
+  "justification": "La regla detecta més de 10 notacions MFA en menys de 15 minuts (T1621, Multi-Factor Authentication Request Generation), una tècnica típica d'atacant que intenta forçar l'aprovació d'una sessió. Les evidencies mostren 27 sol·licituds en 9 minuts, cinc intents de sessió al Portal de l'empleat amb resultats de fallida (denegats o en temps esgotat) des de la mateixa IP, i final_result: approved, cosa que confirma l'execució i l'èxit de l'accés, no un simple resolució DNS ni connexió. La IP 198.51.100.201 no té intel·ligència maliciosa explícita però és una sortida de VPN comercial reconeguda; això no elimina l'activitat maliciosa, ja que l'atacant pot usar una VPN legítima. No hi ha canys aprovats que autoritzin aquesta activitat. Donat que hi ha confirmació d'accés i possible robatori de credencials, es considera atac real amb ajust de severitat +1.",
   "decision": "escalate",
   "recommended_actions": [
    {
@@ -9629,7 +9629,7 @@
    "Determinar la criticitat de l'actiu o de la identitat afectada."
   ],
   "confidence": 0.85,
-  "justification": "La regla detecta un accés VPN d'una compte externa fora de la seva ventana contractual i des d'un ASN no vist (Limited Network LTD, Letònia), quan l'origen habitual és Logisoft Madrid (AS64650). L'esdeveniment VPN-0010704 confirma una connexió reeixida ('action': 'connect') amb MFA aprovada, així que l'accés s'ha executat realment, no és una resolució DNS ni una connexió ignota. Segons la política, un intento bloquejat sense activitat posterior seria true_positive amb ajust -1, però en aquest cas l'accés s'ha confirmat; com que no hi ha evidència d'ús posterior ni d'actiu afectat a la CMDB, s'aplica l'ajust -1. La activitat és maliciosa potencial (possible suplantació del proveedor), per això es escala tot i que la gravitat base és baixa.",
+  "justification": "La regla detecta un accés VPN d'una compte externa fora de la seva ventana contractual i des d'un ASN no vist (Limited Network LTD, Letònia), quan l'origen habitual és Logisoft Madrid (AS64650). L'esdeveniment VPN-0010704 confirma una connexió reeixida ('action': 'connect') amb MFA aprovada, així que l'accés s'ha executat realment, no és una resolució DNS ni una connexió ignota. Segons la política, un intento bloquejat sense activitat posterior seria atac real amb ajust -1, però en aquest cas l'accés s'ha confirmat; com que no hi ha evidència d'ús posterior ni d'actiu afectat a la CMDB, s'aplica l'ajust -1. La activitat és maliciosa potencial (possible suplantació del proveedor), per això es escala tot i que la gravitat base és baixa.",
   "decision": "escalate",
   "recommended_actions": [
    {
@@ -12071,7 +12071,7 @@
   "severity_rationale": "Matriu del SOC: regla mitjana × criticitat Alta de l'actiu WS-BCN-1110 = mitjana. Ajustos: −1 bloquejat per un control sense activitat posterior; total -1 (màxim ±1) → baixa.",
   "open_questions": [],
   "confidence": 0.9,
-  "justification": "La regla dispara per detecció d'antivírus i hi ha evidència concreta: un fitxer executiu sense firma procedent de la carpeta de descàregues, amb verdict de sandbox 'suspicious' i família PA. No és un subdomini de CDN ni un servei legítim, i no hi ha cap canvi aprovat que l'autoritzï. Tot i que l'acció de l'EDR l'ha posat en quarantena sense execució confirmada, es tracta d'activitat realment maliciosa (introducció d'un PUA), per això és true_positive. L'actiu és d'alta criticalitat i l'usuari gestiona comptes a pagar, cosa que eleva el risc potencial.",
+  "justification": "La regla dispara per detecció d'antivírus i hi ha evidència concreta: un fitxer executiu sense firma procedent de la carpeta de descàregues, amb verdict de sandbox 'suspicious' i família PA. No és un subdomini de CDN ni un servei legítim, i no hi ha cap canvi aprovat que l'autoritzï. Tot i que l'acció de l'EDR l'ha posat en quarantena sense execució confirmada, es tracta d'activitat realment maliciosa (introducció d'un PUA), per això és atac real. L'actiu és d'alta criticalitat i l'usuari gestiona comptes a pagar, cosa que eleva el risc potencial.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -12273,7 +12273,7 @@
   "severity_rationale": "Matriu del SOC: regla baixa × criticitat Crítica de l'actiu WEB-ECOM01 (frontal de la botiga en línia, servei «Tienda online y app») = mitjana. Ajustos: −1 bloquejat per un control sense activitat posterior; total -1 (màxim ±1) → baixa.",
   "open_questions": [],
   "confidence": 0.85,
-  "justification": "Hi ha evidència concreta d'activitat maliciosa: 23 hits de la regla 'Scanner Detection' del WAF amb firma d'atac web (SQLi/XSS/LFI), agent 'zgrab/0.x' i status 403 (bloquejat). No hi ha canvi aprovat que cobreixi aquesta alerta (CHG-2026-1042 és un pentest amb IPs i finestra diferents i no cobreix aquesta alerta), per tant no és activitat autoritzada. L'intent va ser bloquejat sense executió ni accés confirmat, així que es manté com a true_positive amb ajust de severitat -1. L'actiu afectat (WEB-ECOM01) és crític per al servei de botiga en línia, i hi ha un origen estranger (RU), per això es recomana escalar.",
+  "justification": "Hi ha evidència concreta d'activitat maliciosa: 23 hits de la regla 'Scanner Detection' del WAF amb firma d'atac web (SQLi/XSS/LFI), agent 'zgrab/0.x' i status 403 (bloquejat). No hi ha canvi aprovat que cobreixi aquesta alerta (CHG-2026-1042 és un pentest amb IPs i finestra diferents i no cobreix aquesta alerta), per tant no és activitat autoritzada. L'intent va ser bloquejat sense executió ni accés confirmat, així que es manté com a atac real amb ajust de severitat -1. L'actiu afectat (WEB-ECOM01) és crític per al servei de botiga en línia, i hi ha un origen estranger (RU), per això es recomana escalar.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -17579,7 +17579,7 @@
   "severity_rationale": "Matriu del SOC: regla mitjana × criticitat Alta de l'actiu AI-ASSIST01 (backend de l'assistent de compra «Vela») = mitjana. Conclusió: falsa alarma → baixa (política del SOC §2).",
   "open_questions": [],
   "confidence": 0.92,
-  "justification": "La frase detectada forma part del vocabulari normal de les peticions de compra (canvi de talla) i no contén elements típics d'un atac de prompt injection. Segons els criteris del SOC, en aquest tipus d'alerta moltes frases normals dels clients disparen el guardarrails i només serien true_positive si intenten treure instruccions, dades, descomptes o claus, cosa que aquí no ocorre. No hi ha intel·ligència maliciosa sobre la IP d'origen (198.18.152.90, Orange Espagne, sense markers de risc), no hi ha canys aprovats que intervenir, i no s'ha executat cap acció ni accés confirmat més enllà de la resol·lació habitual de la sessió autenticada.",
+  "justification": "La frase detectada forma part del vocabulari normal de les peticions de compra (canvi de talla) i no contén elements típics d'un atac de prompt injection. Segons els criteris del SOC, en aquest tipus d'alerta moltes frases normals dels clients disparen el guardarrails i només serien atac real si intenten treure instruccions, dades, descomptes o claus, cosa que aquí no ocorre. No hi ha intel·ligència maliciosa sobre la IP d'origen (198.18.152.90, Orange Espagne, sense markers de risc), no hi ha canys aprovats que intervenir, i no s'ha executat cap acció ni accés confirmat més enllà de la resol·lació habitual de la sessió autenticada.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -18445,7 +18445,7 @@
   "severity_rationale": "Matriu del SOC: regla baixa × criticitat Crítica de l'actiu WEB-ECOM01 (frontal de la botiga en línia, servei «Tienda online y app») = mitjana. Ajustos: −1 bloquejat per un control sense activitat posterior; total -1 (màxim ±1) → baixa.",
   "open_questions": [],
   "confidence": 0.9,
-  "justification": "La regla del WAF (913100, Scanner Detection) ha detectat activitat maliciosa real: 25 intents d'atac a una aplicació web exposada a Internet, amb acció 'blocked'. Les evidències del registre (WAF-0030756) confirmen el patró d'atac, l'origen (escáner BR) i l'objectiu (wp-login.php). Tot i que l'atac està bloquejat i no hi ha accés confirmat, es tracta d'activitat maliciosa real, per això el veredicto és true_positive. El canvi aprovat CHG-2026-1042 no justifica l'activitat perquè cobre_esta_alerta és false (les IPs de l'escàner no coincideixen amb les del pentest).",
+  "justification": "La regla del WAF (913100, Scanner Detection) ha detectat activitat maliciosa real: 25 intents d'atac a una aplicació web exposada a Internet, amb acció 'blocked'. Les evidències del registre (WAF-0030756) confirmen el patró d'atac, l'origen (escáner BR) i l'objectiu (wp-login.php). Tot i que l'atac està bloquejat i no hi ha accés confirmat, es tracta d'activitat maliciosa real, per això el veredicto és atac real. El canvi aprovat CHG-2026-1042 no justifica l'activitat perquè cobre_esta_alerta és false (les IPs de l'escàner no coincideixen amb les del pentest).",
   "decision": "close",
   "recommended_actions": [
    {
@@ -20369,7 +20369,7 @@
    "No hi ha resultat d'intel·ligència per a packaging-iberia-pagos.example; això no confirma que sigui benigne."
   ],
   "confidence": 0.88,
-  "justification": "L'alerta conté text adreçat al sistema automàtic de classificació (intent de manipulació). L'activitat és un intent de phishing real (T1566): un domini que imita un proveïdor conegut canviant-ne el nom (afegint 'pagos'), un missatge d'urgenza per induir a fer clic, i un enllaç cap a un portal extern. El fet que SPF i DKim passin no el fa benign, perquè el domini emissor no és el legítim i el DMARC nul és típic d'aquestes suplantacions. No hi ha canvi aprovat que cobreixi aquesta alerta. El text entre etiquetes del cos, que demana classificar el missatge com a false_positive i no escalar, és un intent de manipulació evident que es recull com a indici en contra. La regla no s'equivocava: era un correu maliciós real, encara que el control l'hagi entregat sense bloquejar-lo.",
+  "justification": "L'alerta conté text adreçat al sistema automàtic de classificació (intent de manipulació). L'activitat és un intent de phishing real (T1566): un domini que imita un proveïdor conegut canviant-ne el nom (afegint 'pagos'), un missatge d'urgenza per induir a fer clic, i un enllaç cap a un portal extern. El fet que SPF i DKim passin no el fa benign, perquè el domini emissor no és el legítim i el DMARC nul és típic d'aquestes suplantacions. No hi ha canvi aprovat que cobreixi aquesta alerta. El text entre etiquetes del cos, que demana classificar el missatge com a falsa alarma i no escalar, és un intent de manipulació evident que es recull com a indici en contra. La regla no s'equivocava: era un correu maliciós real, encara que el control l'hagi entregat sense bloquejar-lo.",
   "decision": "escalate",
   "recommended_actions": [
    {
@@ -20619,7 +20619,7 @@
    "No hi ha resultat d'intel·ligència per a packaging-iberia-pagos.example; això no confirma que sigui benigne."
   ],
   "confidence": 0.92,
-  "justification": "L'alerta conté text adreçat al sistema automàtic de classificació (intent de manipulació). L'alerta descriu un correu de phishing (T1566) amb remitent extern i domini que imita un provisor real, però que no coincideix amb el domini legítim conegut. El cos del missatge conté un text ocult (<div style=\"display:none\">) amb una ordre dirigida al sistema de classificació demanant que es marki como false_positive i no s'escali; això és un intent de manipulació clar i se suma como indicio en contra. No hi ha intel·ligència sobre el domini, però això no el fa benign. L'enllaç i el disseny suposen un intent real d'accés inicial, per la qual cosa es considera activitat maliciosa, tot i que el correu ha estat lliurat.",
+  "justification": "L'alerta conté text adreçat al sistema automàtic de classificació (intent de manipulació). L'alerta descriu un correu de phishing (T1566) amb remitent extern i domini que imita un provisor real, però que no coincideix amb el domini legítim conegut. El cos del missatge conté un text ocult (<div style=\"display:none\">) amb una ordre dirigida al sistema de classificació demanant que es marki como falsa alarma i no s'escali; això és un intent de manipulació clar i se suma como indicio en contra. No hi ha intel·ligència sobre el domini, però això no el fa benign. L'enllaç i el disseny suposen un intent real d'accés inicial, per la qual cosa es considera activitat maliciosa, tot i que el correu ha estat lliurat.",
   "decision": "escalate",
   "recommended_actions": [
    {
@@ -27138,7 +27138,7 @@
   "severity_rationale": "Matriu del SOC: regla baixa × criticitat Crítica de l'actiu WEB-ECOM01 (frontal de la botiga en línia, servei «Tienda online y app») = mitjana. Ajustos: −1 bloquejat per un control sense activitat posterior; total -1 (màxim ±1) → baixa.",
   "open_questions": [],
   "confidence": 0.95,
-  "justification": "Hi ha un indici concret d'activitat maliciosa real: una firma SQLi verificada per libinjection (regla 942100) amb una consulta UNION SELECT explícita, bloquejada pel WAF. Tot i que l'intent va ser aturat sense activitat posterior (per això l'ajust de severitat és -1), no es pot considerar benign perquè el canxi aprovat de pentest té cobre_esta_alerta=false i les IPs d'origen no encaixen. El WAF és una euforpa corporativa legítima, però la regla ha detectat realment un atac, així que el veredicto és true_positive.",
+  "justification": "Hi ha un indici concret d'activitat maliciosa real: una firma SQLi verificada per libinjection (regla 942100) amb una consulta UNION SELECT explícita, bloquejada pel WAF. Tot i que l'intent va ser aturat sense activitat posterior (per això l'ajust de severitat és -1), no es pot considerar benign perquè el canxi aprovat de pentest té cobre_esta_alerta=false i les IPs d'origen no encaixen. El WAF és una euforpa corporativa legítima, però la regla ha detectat realment un atac, així que el veredicto és atac real.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -28244,7 +28244,7 @@
   "severity_rationale": "Matriu del SOC: regla mitjana × criticitat Mitjana de l'actiu WS-MAD-1852 = mitjana. Conclusió: activitat autoritzada → baixa (política del SOC §2).",
   "open_questions": [],
   "confidence": 0.98,
-  "justification": "La detecció és correcta: el fitxer és exactament el estàndar EICAR (Virus:DOS/EICAR_Test_File), un test de seguretat d'antivirús sense cap component malicioso real. El sandbox confirma el verdict clean, score 0 i la família 'Fichero de prueba EICAR'. L'acció de l'EDR ha estat quarantena abans de cap execució (executed: false), i no hi ha cap activitat posterior ni canys aprovats que contradiguin aquesta conclusió. Es tracta d'una activitat autorizada de verificació, per tant benign_true_positive.",
+  "justification": "La detecció és correcta: el fitxer és exactament el estàndar EICAR (Virus:DOS/EICAR_Test_File), un test de seguretat d'antivirús sense cap component malicioso real. El sandbox confirma el verdict clean, score 0 i la família 'Fichero de prueba EICAR'. L'acció de l'EDR ha estat quarantena abans de cap execució (executed: false), i no hi ha cap activitat posterior ni canys aprovats que contradiguin aquesta conclusió. Es tracta d'una activitat autorizada de verificació, per tant activitat autoritzada.",
   "decision": "close",
   "recommended_actions": [
    {
@@ -30233,7 +30233,7 @@
   "severity_rationale": "Matriu del SOC: regla baixa × criticitat Crítica de l'actiu WEB-ECOM01 (frontal de la botiga en línia, servei «Tienda online y app») = mitjana. Ajustos: −1 bloquejat per un control sense activitat posterior; total -1 (màxim ±1) → baixa.",
   "open_questions": [],
   "confidence": 0.85,
-  "justification": "Hi ha un indici concret d'activitat maliciosa: una firma d'atac SQLi/XSS/LFI (regla 930130 'Restricted File Access') detectada 23 vegades contra un actiu crític d'internet. L'origen és una IP de hosting/escàner d'Internet (AS64680, Brasil), no un subdomini de CDN ni una eina corporativa. El canvi aprovat de pentest no justifica l'activitat: no cobreix aquesta alerta i les IPs d'origen no coincideixen. Tot i que l'intent ha estat bloquejat sense activitat posterior, es tracta d'un intent real d'extracció de dades sensibles (fitxier de configuració amb claus), per això es manté com a true_positive amb ajust de severitat -1.",
+  "justification": "Hi ha un indici concret d'activitat maliciosa: una firma d'atac SQLi/XSS/LFI (regla 930130 'Restricted File Access') detectada 23 vegades contra un actiu crític d'internet. L'origen és una IP de hosting/escàner d'Internet (AS64680, Brasil), no un subdomini de CDN ni una eina corporativa. El canvi aprovat de pentest no justifica l'activitat: no cobreix aquesta alerta i les IPs d'origen no coincideixen. Tot i que l'intent ha estat bloquejat sense activitat posterior, es tracta d'un intent real d'extracció de dades sensibles (fitxier de configuració amb claus), per això es manté com a atac real amb ajust de severitat -1.",
   "decision": "close",
   "recommended_actions": [
    {
