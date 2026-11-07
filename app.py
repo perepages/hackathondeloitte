@@ -135,7 +135,15 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
     st.subheader(" Pla d'Acció Recomanat ")
     
     # Selecció del model d'Ollama instal·lat localment
-    ruta = r"C:\Users\OneDrive\Documents\GitHub\hackathondeloitte\ticket_salida.schema.json"
+    ruta_schema = r"C:\Users\marti\OneDrive\Documents\GitHub\hackathondeloitte\ticket_salida.schema.json"
+    try:
+        with open(ruta_schema, "r", encoding="utf-8") as f:
+            schema_content = f.read()
+    except FileNotFoundError:
+        st.error(f"No s'ha trobat el fitxer d'esquema a la ruta: {ruta_schema}")
+        st.stop()
+        
+        # 3. Construir el prompt inserint el contingut del fitxer
     selected_model = "llama3"
 
     if st.button("Generar resum d'accions", type="primary", use_container_width=True):
@@ -150,10 +158,13 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
         
         prompt = (
             "Ets un analista expert d'un SOC (Centre d'Operacions de Seguretat). "
-            f"A partir de la seguent estructura, completa amb les dades que proporcionem i els resultats adhients: {ruta})"
-            "Expressa les conclusions en el format JSON de l'esquema proveït. Omple totes les caselles, tot i que ja tinguem l'informació en el context"
+            "A partir de les dades de l'alerta que et proporcionem a continuació, analitza els resultats "
+            "i extreu-ne les conclusions.\n\n"
+            "MOLT IMPORTANT: Has de respondre ÚNICAMENT amb un objecte JSON vàlid que compleixi "
+            f"ESTRICTAMENT amb aquest esquema (JSON Schema):\n\n{schema_content}\n\n"
+            "No afegeixis cap salutació, explicació ni text fora del format JSON.\n\n"
             f"Dades de l'alerta:\n{json.dumps(context_data, indent=2, ensure_ascii=False)}"
-        )
+        )     
 
         try:
             with st.spinner("Analitzant..."):
