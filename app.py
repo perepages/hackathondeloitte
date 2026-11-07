@@ -132,9 +132,10 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
     with tab_alert:
         st.json(alert)
     st.divider()
-    st.subheader("🤖 Pla d'Acció Recomanat (Ollama)")
+    st.subheader(" Pla d'Acció Recomanat ")
     
     # Selecció del model d'Ollama instal·lat localment
+    ruta = r"C:\Users\OneDrive\Documents\GitHub\hackathondeloitte\ticket_salida.schema.json"
     selected_model = "llama3"
 
     if st.button("Generar resum d'accions", type="primary", use_container_width=True):
@@ -149,13 +150,13 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
         
         prompt = (
             "Ets un analista expert d'un SOC (Centre d'Operacions de Seguretat). "
-            "A partir de les següents dades d'una alerta preliminar, genera un breu resum de la situació "
-            "i una llista de 3 a 5 accions clares i concretes de mitigació i contenció que s'haurien de prendre.\n\n"
+            f"A partir de la seguent estructura, completa amb les dades que proporcionem i els resultats adhients: {ruta})"
+            "Expressa les conclusions en el format JSON de l'esquema proveït. Omple totes les caselles, tot i que ja tinguem l'informació en el context"
             f"Dades de l'alerta:\n{json.dumps(context_data, indent=2, ensure_ascii=False)}"
         )
 
         try:
-            with st.spinner(f"Connectant amb Ollama ({selected_model})..."):
+            with st.spinner("Analitzant..."):
                 # 2. Cridar l'API local d'Ollama en mode stream per a millor UX
                 response_stream = ollama.chat(
                     model=selected_model,
