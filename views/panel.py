@@ -27,6 +27,8 @@ st.title("Resumen")
 st.markdown('<p class="muted">La foto de conjunto para dirección: cuánto trabajo quita el sistema, qué tipo de '
             "avisos llegan y qué casos escalados corren prisa.</p>", unsafe_allow_html=True)
 rows = data.load_results()
+if not rows:
+    ui.empty_state("datos que resumir")
 n = len(rows)
 closed = sum(r["decision"] == "close" for r in rows)
 m = st.columns(4)

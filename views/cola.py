@@ -15,6 +15,9 @@ rows = data.load_results()
 if (qa := st.query_params.get("alerta")) and any(r["alert_id"] == qa for r in rows):
     st.session_state["selected_alert"] = qa
     del st.query_params["alerta"]
+if not rows:
+    st.title("Alertas")
+    ui.empty_state("alertas en la bandeja")
 waiting = [r for r in rows if r["decision"] == "escalate" and not r["review"]]
 
 st.title("Alertas")

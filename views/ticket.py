@@ -63,7 +63,12 @@ def validate(ticket: dict) -> str | None:
 
 rows = data.load_results()
 ids = [r["alert_id"] for r in rows]
-current = st.session_state.get("selected_alert") or next(r["alert_id"] for r in rows if r["decision"] == "escalate")
+if not rows:
+    st.title("Informe para N2")
+    ui.empty_state("informes")
+current = st.session_state.get("selected_alert")
+if current not in ids:
+    current = next((r["alert_id"] for r in rows if r["decision"] == "escalate"), ids[0])
 
 st.title("Informe para N2")
 st.markdown('<p class="muted">Lo que recibe el analista senior cuando una alerta se escala: qué ha pasado, a quién '

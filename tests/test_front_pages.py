@@ -69,3 +69,14 @@ def test_contencion_aprobar_y_ejecutar():
         runs[0].click().run()
         assert not at.exception, at.exception
         assert any("Hecha" in s.value for s in at.success)
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_paginas_en_modo_live_sin_alertas(page, monkeypatch):
+    """Así se arranca el día de la defensa: modo live y ninguna alerta triada todavía."""
+    from core import data
+    monkeypatch.setattr(data, "MODE", "live")
+    monkeypatch.setattr(data, "suggest_ids", lambda n=10: [])  # sin depender de la API de Deloitte
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.switch_page(page).run()
+    assert not at.exception, at.exception

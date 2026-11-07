@@ -119,7 +119,7 @@ def to_view(preview: dict) -> dict:
         back_gives = back_value not in (None, "", []) and not (f == "verdict" and back_value == "needs_more_info")
         if back_gives:
             view[f] = back_value
-        elif f in ej:
+        elif ej.get(f) not in (None, "", []):
             view[f] = ej[f]
             view["example_fields"].append(f)
         else:
@@ -147,10 +147,27 @@ def get_result(alert_id: str) -> dict | None:
     return next((r for r in load_results() if r["alert_id"] == alert_id), None)
 
 
+def _example_fields(alert: dict) -> dict | None:
+    """Campos de ejemplo (veredicto, decisión, acciones…) con las mismas reglas de prueba que la muestra.
+    Solo rellenan lo que el back todavía no da; salen marcados como «dato de ejemplo»."""
+    try:
+        import importlib.util
+        path = os.path.join(ROOT, "scripts", "build_fixture.py")
+        spec = importlib.util.spec_from_file_location("build_fixture", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.example_fields(alert)
+    except Exception:  # sin reglas de ejemplo se ve el back tal cual
+        return None
+
+
 def analyze_live(alert_id: str) -> dict:
     """Llama al back real (necesita la API :8000)."""
     from triage import analyze_alert
-    view = to_view(analyze_alert(alert_id).model_dump())
+    preview = analyze_alert(alert_id).model_dump()
+    if USE_EXAMPLES and (ej := _example_fields(preview["alert"])):
+        preview["_ejemplo"] = ej
+    view = to_view(preview)
     live = [r for r in st.session_state.get("data_live_results", []) if r["alert_id"] != alert_id]
     st.session_state["data_live_results"] = live + [view]
     return view
@@ -227,3 +244,43 @@ def action_plan(view: dict):
     """Plan de acción redactado por el LLM, a trozos (para st.write_stream). El LLM solo redacta: no decide."""
     import assistant
     return assistant.action_plan(view)
+
+
+# ----------------------------------------------------------------------------- alertas para el directo
+
+def suggest_ids(n: int = 10) -> list[str]:
+    """Alertas de ejemplo para el directo: variadas (una por regla).
+
+    fixture: 5 que se cierran y 5 que se escalan de la muestra.
+    live:    de la cola real de la API de Deloitte (alertas que no están en la muestra de desarrollo)."""
+    if MODE == "fixture":
+        seen, pick = set(), []
+        for want in ("close", "escalate"):
+            k = 0
+            for r in load_results():
+                if r["decision"] == want and r["rule_id"] not in seen and k < n // 2:
+                    seen.add(r["rule_id"]); pick.append(r["alert_id"]); k += 1
+        return pick
+    import soc_api
+    items = soc_api.list_alerts(status="new", limit=600, offset=4000).get("items", [])
+    seen, pick = set(), []
+    for a in items:
+        if a.get("rule_id") not in seen:
+            seen.add(a.get("rule_id")); pick.append(a["alert_id"])
+        if len(pick) == n:
+            break
+    return pick
+
+
+@st.cache_data(show_spinner=False)
+def alert_brief(alert_id: str) -> dict:
+    """Nombre, origen y hora de una alerta aún sin triar (para pintar su tarjeta). Vacío si no se puede."""
+    if MODE == "fixture":
+        return {}
+    try:
+        import soc_api
+        a = soc_api.get_alert(alert_id)
+        return {"rule_name": a.get("rule_name", alert_id), "source_product": a.get("source_product", ""),
+                "created_at": a.get("created_at", "")}
+    except Exception:
+        return {}

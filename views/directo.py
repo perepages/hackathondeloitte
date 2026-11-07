@@ -14,16 +14,6 @@ st.markdown('<p class="muted">Así funciona con alertas nuevas, como las que dar
             "<b>quedan esperando a una persona</b>.</p>", unsafe_allow_html=True)
 
 
-def sample_ids(rows: list[dict]) -> list[str]:
-    """10 de ejemplo: 5 que se cierran y 5 que se escalan, de reglas distintas."""
-    seen, pick = set(), []
-    for want in ("close", "escalate"):
-        n = 0
-        for r in rows:
-            if r["decision"] == want and r["rule_id"] not in seen and n < 5:
-                seen.add(r["rule_id"]); pick.append(r["alert_id"]); n += 1
-    return pick
-
 
 rows = data.load_results()
 by_id = {r["alert_id"]: r for r in rows}
@@ -34,7 +24,13 @@ with st.expander("Usar mis propias alertas (opcional)"):
     pasted = c2.text_area("…o pega identificadores de alerta, uno por línea", key="directo_ids", height=100)
 ids = data.load_alert_ids_from_jsonl(up.getvalue()) if up else [l.strip() for l in pasted.splitlines() if l.strip()]
 if not ids:
-    ids = sample_ids(rows)
+    try:
+        ids = data.suggest_ids(10)
+    except Exception as exc:  # p. ej. la API de Deloitte no está arrancada (modo live)
+        st.error(f"No he podido pedir alertas a la API del SOC: {exc}")
+        ids = []
+    st.caption("Sin fichero ni lista: se usarán " + str(len(ids)) + " alertas de ejemplo"
+               + (" de la muestra." if data.MODE == "fixture" else " de la cola real de la API de Deloitte."))
 
 b1, b2 = st.columns([2, 5], vertical_alignment="center")
 go = b1.button(f"▶ Empezar con {len(ids)} alertas", type="primary", key="directo_go", use_container_width=True)
@@ -45,7 +41,8 @@ state = {"in": list(ids), "work": None, "calls": [], "close": [], "esc": []}
 
 
 def placeholder(alert_id: str) -> dict:
-    return by_id.get(alert_id) or {"rule_name": alert_id, "source_product": "", "created_at": ""}
+    return by_id.get(alert_id) or data.alert_brief(alert_id) or {"rule_name": alert_id, "source_product": "",
+                                                                  "created_at": ""}
 
 
 def paint():
