@@ -98,3 +98,19 @@ def query_list(queries: list[dict]) -> None:
 
 def fmt_time(iso: str) -> str:
     return iso.replace("T", " ")[:16] + " UTC" if iso else "—"
+
+
+def style_queue(df: pd.DataFrame) -> "pd.io.formats.style.Styler":
+    """Colorea la columna «Severidad» de la cola (texto blanco sobre el color de la severidad)."""
+    by_label = {SEVERITY_LABEL[k]: v for k, v in SEVERITY_COLOR.items()}
+
+    def cell(v):
+        c = by_label.get(v)
+        return f"background-color: {c}; color: #ffffff; font-weight: 600" if c else ""
+
+    return df.style.map(cell, subset=["Severidad"])
+
+
+def is_ot(view: dict) -> bool:
+    """La política prohíbe al SOC actuar sobre la red OT: solo se escala a Operaciones."""
+    return any(c["kind"] == "asset" and c["data"].get("zone") == "LOGISTICS-OT" for c in view.get("contexts", []))
