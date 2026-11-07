@@ -174,15 +174,37 @@ def _example_fields(alert: dict) -> dict | None:
         return None
 
 
-def analyze_live(alert_id: str) -> dict:
-    """Llama al back real (necesita la API :8000)."""
+WORKERS = int(os.getenv("SOC_WORKERS", "4"))  # alertas triadas a la vez en directo (API + IA)
+
+
+class SkippedAlert(Exception):
+    """Alerta que no se puede triar (p. ej. la API del SOC no la reconoce). Se salta y se avisa; no para el lote."""
+
+
+def _triage_one(alert_id: str) -> dict:
+    """Tría una alerta con el back y devuelve la vista. Sin Streamlit: se puede llamar desde varios hilos."""
+    import soc_api
     from triage import analyze_alert
-    preview = analyze_alert(alert_id).model_dump()
+    try:
+        preview = analyze_alert(alert_id).model_dump()
+    except soc_api.SocAPIError as exc:
+        if exc.status_code == 404:
+            raise SkippedAlert("l'API del SOC no reconeix aquesta alerta") from exc
+        raise SkippedAlert(f"error de l'API del SOC: {str(exc)[:120]}") from exc
     if USE_EXAMPLES and (ej := _example_fields(preview["alert"])):
         preview["_ejemplo"] = ej
-    view = to_view(preview)
-    live = [r for r in st.session_state.get("data_live_results", []) if r["alert_id"] != alert_id]
+    return to_view(preview)
+
+
+def _store_live(view: dict) -> None:
+    live = [r for r in st.session_state.get("data_live_results", []) if r["alert_id"] != view["alert_id"]]
     st.session_state["data_live_results"] = live + [view]
+
+
+def analyze_live(alert_id: str) -> dict:
+    """Llama al back real (necesita la API :8000)."""
+    view = _triage_one(alert_id)
+    _store_live(view)
     return view
 
 
@@ -196,41 +218,99 @@ def refresh(max_new: int = 5, on_progress: Callable[[int, int], None] | None = N
     known = {r["alert_id"] for r in st.session_state.get("data_live_results", [])}
     queue = soc_api.list_alerts(status="new", limit=100).get("items", [])
     new = [a["alert_id"] for a in queue if a.get("alert_id") not in known][:max_new]
-    for n, alert_id in enumerate(new, 1):
-        analyze_live(alert_id)
-        if on_progress:
-            on_progress(n, len(new))
-    return len(new)
+    done = []
+
+    def progress(ev: dict) -> None:
+        if ev["type"] in ("verdict", "error"):
+            done.append(ev)
+            if on_progress:
+                on_progress(len(done), len(new))
+
+    return len(run_triage(new, progress))
+
+
+def parse_alert_file(content: bytes | str) -> tuple[list[str], list[dict]]:
+    """Lee un JSONL de alertas (el que nos den el día de la defensa) sin romperse.
+
+    Devuelve (ids válidos, sin duplicados y en orden) y la lista de líneas saltadas [{line, reason}]:
+    JSON roto, una línea que no es un objeto o sin alert_id. Las líneas en blanco se ignoran sin avisar."""
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="replace")
+    ids, skipped = [], []
+    for n, line in enumerate(content.lstrip("\ufeff").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            skipped.append({"line": n, "reason": "no és un JSON vàlid"})
+            continue
+        alert_id = obj.get("alert_id") if isinstance(obj, dict) else None
+        if not isinstance(alert_id, str) or not alert_id.strip():
+            skipped.append({"line": n, "reason": "no té alert_id"})
+            continue
+        if alert_id.strip() not in ids:
+            ids.append(alert_id.strip())
+    return ids, skipped
 
 
 def load_alert_ids_from_jsonl(content: bytes | str) -> list[str]:
-    """IDs de un JSONL de alertas (el que nos den el día de la defensa)."""
-    text = content.decode("utf-8") if isinstance(content, bytes) else content
-    return [json.loads(line)["alert_id"] for line in text.splitlines() if line.strip()]
+    """IDs válidos de un JSONL de alertas (las líneas rotas se saltan; ver parse_alert_file)."""
+    return parse_alert_file(content)[0]
 
 
 # ----------------------------------------------------------------------------- directo
 
-def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: float = 0.35) -> list[dict]:
+def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: float = 0.35,
+               workers: int | None = None) -> list[dict]:
     """Tría una lista y avisa de cada paso con los eventos del contrato:
-    alert_started -> api_call (uno por consulta) -> verdict ... -> done.
+    alert_started -> api_call (uno por consulta) -> verdict | error ... -> done.
 
-    Hoy las consultas se emiten al acabar cada alerta (el back aún no tiene on_event);
-    en modo fixture se reproducen con pausas para la demo."""
-    by_id = {r["alert_id"]: r for r in load_results()} if MODE == "fixture" else {}
-    results = []
-    for alert_id in alert_ids:
-        on_event({"type": "alert_started", "alert_id": alert_id})
-        view = by_id.get(alert_id) if MODE == "fixture" else analyze_live(alert_id)
-        if view is None:
-            on_event({"type": "error", "alert_id": alert_id, "message": "no está en el fixture"})
-            continue
-        for q in view["queries"]:
-            on_event({"type": "api_call", "alert_id": alert_id, **q})
-            if MODE == "fixture":
+    live: tría `workers` alertas a la vez (por defecto 4). Si una falla (p. ej. la API no la reconoce), se emite
+    `error` con el motivo y se sigue con las demás: nunca se para el lote. fixture: reproduce la muestra con pausas.
+    Los eventos se emiten siempre desde el hilo principal (Streamlit solo pinta desde ahí)."""
+    results: list[dict] = []
+    if MODE == "fixture":
+        by_id = {r["alert_id"]: r for r in load_results()}
+        for alert_id in alert_ids:
+            on_event({"type": "alert_started", "alert_id": alert_id})
+            view = by_id.get(alert_id)
+            if view is None:
+                on_event({"type": "error", "alert_id": alert_id,
+                          "message": "no és a la mostra (per triar alertes noves cal el mode en directe)"})
+                continue
+            for q in view["queries"]:
+                on_event({"type": "api_call", "alert_id": alert_id, **q})
                 time.sleep(pause)
-        on_event({"type": "verdict", "alert_id": alert_id, "result": view})
-        results.append(view)
+            on_event({"type": "verdict", "alert_id": alert_id, "result": view})
+            results.append(view)
+        on_event({"type": "done"})
+        return results
+
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+    pending, running = list(alert_ids), {}
+    with ThreadPoolExecutor(max_workers=max(1, workers or WORKERS)) as pool:
+        while pending or running:
+            while pending and len(running) < max(1, workers or WORKERS):
+                alert_id = pending.pop(0)
+                on_event({"type": "alert_started", "alert_id": alert_id})
+                running[pool.submit(_triage_one, alert_id)] = alert_id
+            finished, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in finished:
+                alert_id = running.pop(future)
+                try:
+                    view = future.result()
+                except SkippedAlert as exc:
+                    on_event({"type": "error", "alert_id": alert_id, "message": str(exc)})
+                    continue
+                except Exception as exc:  # cualquier otro fallo de esa alerta: se salta, el resto sigue
+                    on_event({"type": "error", "alert_id": alert_id, "message": f"error en triar-la: {str(exc)[:120]}"})
+                    continue
+                _store_live(view)
+                for q in view["queries"]:
+                    on_event({"type": "api_call", "alert_id": alert_id, **q})
+                on_event({"type": "verdict", "alert_id": alert_id, "result": view})
+                results.append(view)
     on_event({"type": "done"})
     return results
 

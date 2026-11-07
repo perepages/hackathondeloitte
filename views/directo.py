@@ -22,8 +22,19 @@ with st.expander("Fer servir les meves alertes (opcional)"):
     c1, c2 = st.columns(2)
     up = c1.file_uploader("Fitxer d'alertes (JSONL)", type=["jsonl", "json"], key="directo_file")
     pasted = c2.text_area("…o enganxa identificadors d'alerta, un per línia", key="directo_ids", height=100)
-ids = data.load_alert_ids_from_jsonl(up.getvalue()) if up else [l.strip() for l in pasted.splitlines() if l.strip()]
-if not ids:
+file_skipped: list[dict] = []
+if up:
+    ids, file_skipped = data.parse_alert_file(up.getvalue())
+else:
+    ids = list(dict.fromkeys(l.strip() for l in pasted.splitlines() if l.strip()))
+if file_skipped:
+    st.warning(f"{len(file_skipped)} alerta(es) del fitxer s'han saltat per algun error.", icon="⚠️")
+    with st.expander("Veure quines línies s'han saltat i per què"):
+        st.dataframe([{"Línia": x["line"], "Motiu": x["reason"]} for x in file_skipped], hide_index=True,
+                     use_container_width=True)
+if up and not ids:
+    st.error("El fitxer no té cap alerta vàlida per triar.")
+elif not ids:
     try:
         ids = data.suggest_ids(10)
     except Exception as exc:  # p. ej. la API de Deloitte no está arrancada (modo live)
@@ -37,7 +48,7 @@ go = b1.button(f"▶ Començar amb {len(ids)} alertes", type="primary", key="dir
 progress = b2.progress(0.0, text=f"0 de {len(ids)} alertes revisades")
 board = st.empty()
 
-state = {"in": list(ids), "work": None, "calls": [], "close": [], "esc": []}
+state = {"in": list(ids), "work": [], "calls": {}, "close": [], "esc": [], "skipped": []}
 
 
 def placeholder(alert_id: str) -> dict:
@@ -49,10 +60,10 @@ BOARD_H = 420  # altura fija de cada columna del kanban; scroll interno si hay m
 
 
 def paint():
-    work = [ui.live_card(placeholder(state["work"]), "work", state["calls"])] if state["work"] else []
+    work = [ui.live_card(placeholder(a), "work", state["calls"].get(a, [])) for a in state["work"]]
     spec = [
         ("Entren", "Avisos nous esperant revisió", [ui.live_card(placeholder(i), "in") for i in state["in"]], False),
-        ("Investigant", "El sistema està fent comprovacions", work, False),
+        ("Investigant", "El sistema en revisa diverses alhora", work, False),
         ("Tancades pel sistema", "Concloses i justificades", [ui.live_card(r, "close") for r in state["close"]], False),
         ("Esperen una persona", "S'escalen a un analista sènior", [ui.live_card(r, "esc") for r in state["esc"]], True),
     ]
@@ -63,19 +74,27 @@ def paint():
     )
     board.markdown(html, unsafe_allow_html=True)
     done = len(state["close"]) + len(state["esc"])
-    progress.progress(done / max(1, len(ids)), text=f"{done} de {len(ids)} alertes revisades")
+    done += len(state["skipped"])
+    progress.progress(min(1.0, done / max(1, len(ids))), text=f"{done} de {len(ids)} alertes revisades")
 
 
 def on_event(ev: dict):
+    aid = ev.get("alert_id")
     if ev["type"] == "alert_started":
-        if ev["alert_id"] in state["in"]:
-            state["in"].remove(ev["alert_id"])
-        state["work"], state["calls"] = ev["alert_id"], []
+        if aid in state["in"]:
+            state["in"].remove(aid)
+        state["work"].append(aid)
+        state["calls"][aid] = []
     elif ev["type"] == "api_call":
-        state["calls"].append(ev)
-    elif ev["type"] == "verdict":
-        res = ev["result"]; state["work"] = None
-        state["esc" if res["decision"] == "escalate" else "close"].append(res)
+        state["calls"].setdefault(aid, []).append(ev)
+    elif ev["type"] in ("verdict", "error"):
+        if aid in state["work"]:
+            state["work"].remove(aid)
+        if ev["type"] == "verdict":
+            res = ev["result"]
+            state["esc" if res["decision"] == "escalate" else "close"].append(res)
+        else:  # alerta saltada: l'API no la reconeix o ha fallat; la resta continua
+            state["skipped"].append({"Alerta": aid, "Motiu": ev.get("message", "error")})
     paint()
 
 
@@ -84,12 +103,21 @@ if go:
     data.run_triage(ids, on_event)
     esc_ids = [r["alert_id"] for r in state["esc"]]
     st.session_state["directo_ultimo"] = esc_ids
+    st.session_state["directo_saltades"] = [{"Alerta": f"línia {x['line']} del fitxer", "Motiu": x["reason"]}
+                                            for x in file_skipped] + state["skipped"]
     if esc_ids:
         components.html(
             "<script>window.parent.document.getElementById('escaladas')"
             ".scrollIntoView({behavior:'smooth',block:'start'});</script>",
             height=0,
         )
+
+skipped_all = st.session_state.get("directo_saltades") or []
+if skipped_all:
+    st.warning(f"{len(skipped_all)} alerta(es) s'han saltat per algun error. La resta s'han triat amb normalitat.",
+               icon="⚠️")
+    with st.expander("Veure quines alertes s'han saltat i per què"):
+        st.dataframe(skipped_all, hide_index=True, use_container_width=True)
 
 pending = st.session_state.get("directo_ultimo") or []
 if pending:
