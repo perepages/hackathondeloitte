@@ -1,4 +1,4 @@
-"""Informe para N2: el ticket en el formato de Deloitte (01_contexto/ticket_salida.schema.json).
+"""Informe para N2: el ticket en el formato de Deloitte (01_contexto/ticket_salida.schema.json). Textos en catalán.
 
 Dueño: PERSONA A. Arriba el informe legible para una persona; abajo el JSON validado y descargable.
 """
@@ -40,8 +40,8 @@ def build_ticket(r: dict) -> dict:
         "enrichment": [{"indicator": q["path"].rsplit("/", 1)[-1], "type": "intel", "source": "TIP + GeoIP",
                         "result": q["summary"]} for q in r["queries"] if q["path"].startswith("/intel/")]
                       + [{"indicator": c["key"], "type": "sha256", "source": "Sandbox",
-                          "result": f"veredicto {c['data'].get('verdict', '?')}, puntuación {c['data'].get('score', '?')}"
-                                    + (f", familia {c['data']['family']}" if c["data"].get("family") else "")}
+                          "result": f"veredicte {c['data'].get('verdict', '?')}, puntuació {c['data'].get('score', '?')}"
+                                    + (f", família {c['data']['family']}" if c["data"].get("family") else "")}
                          for c in ctx if c["kind"] == "sandbox"],
         "mitre": [m] if (m := (r["alert"].get("mitre") or {}).get("technique_id")) else [],
         "recommended_actions": r["recommended_actions"],
@@ -68,19 +68,19 @@ def validate(ticket: dict) -> str | None:
 rows = data.load_results()
 ids = [r["alert_id"] for r in ui.by_severity(rows)]  # en el desplegable, de más a menos grave
 if not rows:
-    st.title("Informe para N2")
+    st.title("Informe per a N2")
     ui.empty_state("informes")
 current = st.session_state.get("selected_alert")
 if current not in ids:
     current = next((r["alert_id"] for r in rows if r["decision"] == "escalate"), ids[0])
 
-st.title("Informe para N2")
-st.markdown('<p class="muted">Lo que recibe el analista senior cuando una alerta se escala: qué ha pasado, a quién '
-            "afecta, en qué se basa la conclusión y qué se recomienda hacer. Sigue el formato oficial de Deloitte.</p>",
+st.title("Informe per a N2")
+st.markdown('<p class="muted">El que rep l\'analista sènior quan s\'escala una alerta: què ha passat, a qui '
+            "afecta, en què es basa la conclusió i què es recomana fer. Segueix el format oficial de Deloitte.</p>",
             unsafe_allow_html=True)
 alert_id = st.selectbox("Alerta", ids, index=ids.index(current), key="ticket_alert",
                         format_func=lambda i: ui.option_label(data.get_result(i)),
-                        help="🔴 crítica · 🟠 alta · 🟡 media · 🔵 baja · ⚪ informativa")
+                        help="🔴 crítica · 🟠 alta · 🟡 mitjana · 🔵 baixa · ⚪ informativa")
 st.session_state["selected_alert"] = alert_id
 r = data.get_result(alert_id)
 t = build_ticket(r)
@@ -93,50 +93,50 @@ with st.container(border=True):
                 unsafe_allow_html=True)
     st.subheader(t["title"], anchor=False)
     esc = t["escalation"]["escalate"]
-    who = (f"decidido por {rv['analyst']}" if rv else "propuesta del sistema, todavía sin revisar por una persona")
-    (st.warning if esc else st.info)(("**Se escala a N2** · " if esc else "**Se cierra** · ") + who)
-    st.markdown(f"**Qué ha pasado.** {ui.md(t['summary'])}")
+    who = (f"decidit per {rv['analyst']}" if rv else "proposta del sistema, encara sense revisar per una persona")
+    (st.warning if esc else st.info)(("**S'escala a N2** · " if esc else "**Es tanca** · ") + who)
+    st.markdown(f"**Què ha passat.** {ui.md(t['summary'])}")
     m = st.columns(3)
-    m[0].metric("Seguridad de la conclusión", f"{round(t['confidence'] * 100)} %" if r["confidence"] is not None else "—")
-    m[1].metric("Gravedad", ui.SEVERITY_LABEL[t["severity"]].capitalize(), help=ui.SEVERITY_HELP[t["severity"]])
-    m[2].metric("Técnica de ataque (MITRE)", ", ".join(t["mitre"]) or "—")
+    m[0].metric("Seguretat de la conclusió", f"{round(t['confidence'] * 100)} %" if r["confidence"] is not None else "—")
+    m[1].metric("Gravetat", ui.SEVERITY_LABEL[t["severity"]].capitalize(), help=ui.SEVERITY_HELP[t["severity"]])
+    m[2].metric("Tècnica d'atac (MITRE)", ", ".join(t["mitre"]) or "—")
 
 # ---------------------------------------------------------------------------- cuerpo
 c1, c2 = st.columns(2, gap="large")
 with c1:
-    st.markdown("**A quién afecta**")
+    st.markdown("**A qui afecta**")
     aff = t["affected"]
-    st.dataframe(pd.DataFrame([("Personas", ", ".join(aff["users"]) or "—"), ("Equipos", ", ".join(aff["hosts"]) or "—"),
-                               ("Servicios de negocio", ", ".join(aff["business_services"]) or "—"),
-                               ("Clientes", ", ".join(aff["customers"]) or "—")], columns=["Qué", "Cuál"]),
+    st.dataframe(pd.DataFrame([("Persones", ", ".join(aff["users"]) or "—"), ("Equips", ", ".join(aff["hosts"]) or "—"),
+                               ("Serveis de negoci", ", ".join(aff["business_services"]) or "—"),
+                               ("Clients", ", ".join(aff["customers"]) or "—")], columns=["Què", "Quin"]),
                  hide_index=True, use_container_width=True)
-    st.markdown("**Qué se sabe de los indicadores**")
+    st.markdown("**Què se sap dels indicadors**")
     if t["enrichment"]:
         st.dataframe(pd.DataFrame(t["enrichment"])[["indicator", "result"]].rename(
-            columns={"indicator": "Indicador", "result": "Resultado"}), hide_index=True, use_container_width=True)
+            columns={"indicator": "Indicador", "result": "Resultat"}), hide_index=True, use_container_width=True)
     else:
-        st.caption("No había IPs ni dominios que consultar.")
+        st.caption("No hi havia IP ni dominis per consultar.")
 with c2:
-    st.markdown(f"**Qué recomienda hacer** {ui.example_tag(r, 'recommended_actions')}", unsafe_allow_html=True)
-    acts = [{"Acción": ui.ACTION_LABEL.get(x["action"], x["action"]), "Sobre": x["target"],
-             "¿Necesita aprobación?": "Sí, de N2" if x["requires_approval"] else "No"}
+    st.markdown(f"**Què recomana fer** {ui.example_tag(r, 'recommended_actions')}", unsafe_allow_html=True)
+    acts = [{"Acció": ui.ACTION_LABEL.get(x["action"], x["action"]), "Sobre": x["target"],
+             "Necessita aprovació?": "Sí, de N2" if x["requires_approval"] else "No"}
             for x in t["recommended_actions"]]
     if acts:
         st.dataframe(pd.DataFrame(acts), hide_index=True, use_container_width=True)
     if any(x["requires_approval"] for x in t["recommended_actions"]):
-        if st.button("Ir a aprobar estas acciones", key="ticket_to_contencion", icon=":material/shield:"):
+        if st.button("Anar a aprovar aquestes accions", key="ticket_to_contencion", icon=":material/shield:"):
             st.switch_page("views/contencion.py")
-    st.markdown("**Registros que lo respaldan**")
+    st.markdown("**Registres que ho avalen**")
     if t["evidence"]:
-        st.dataframe(pd.DataFrame(t["evidence"]).rename(columns={"source": "Fuente", "event_id": "Registro",
-                                                                 "finding": "Qué muestra"}),
+        st.dataframe(pd.DataFrame(t["evidence"]).rename(columns={"source": "Font", "event_id": "Registre",
+                                                                 "finding": "Què mostra"}),
                      hide_index=True, use_container_width=True)
     else:
-        st.caption("No se encontraron registros relacionados.")
+        st.caption("No s'han trobat registres relacionats.")
 
 if t["open_questions"]:
     with st.container(border=True):
-        st.markdown("**Lo que queda por comprobar**")
+        st.markdown("**El que queda per comprovar**")
         for oq in t["open_questions"]:
             st.markdown(f"- {ui.md(oq)}")
 
@@ -145,14 +145,14 @@ st.divider()
 err = validate(t)
 v1, v2 = st.columns([3, 1], vertical_alignment="center")
 if err is None:
-    v1.success("Formato comprobado: el informe cumple el esquema oficial de Deloitte (ticket_salida.schema.json).",
+    v1.success("Format comprovat: l'informe compleix l'esquema oficial de Deloitte (ticket_salida.schema.json).",
                icon=":material/verified:")
 elif err == "sin-esquema":
-    v1.caption("No encuentro el esquema de Deloitte en ../DTT-UAB-The-Hack; no se ha comprobado el formato.")
+    v1.caption("No s'ha pogut comprovar el format: no es troba l'esquema de Deloitte.")
 else:
-    v1.error(f"El informe no cumple el esquema: {err}")
-v2.download_button("Descargar informe (JSON)", json.dumps(t, ensure_ascii=False, indent=2),
+    v1.error(f"L'informe no compleix l'esquema: {err}")
+v2.download_button("Descarregar l'informe (JSON)", json.dumps(t, ensure_ascii=False, indent=2),
                    file_name=f"{t['ticket_id']}.json", mime="application/json", use_container_width=True,
                    key="ticket_download", icon=":material/download:")
-with st.expander("Ver el informe tal como lo recibe el sistema (JSON)"):
+with st.expander("Veure l'informe tal com el rep el sistema (JSON)"):
     st.json(t)

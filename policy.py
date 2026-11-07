@@ -2,6 +2,15 @@ import unicodedata
 
 
 SEVERITY_ORDER = ("informational", "low", "medium", "high", "critical")
+# Nombres en catalán para los textos que ve la persona (la interfaz está en catalán)
+SEVERITY_CA = {"informational": "informativa", "low": "baixa", "medium": "mitjana", "high": "alta",
+               "critical": "crítica"}
+CRITICALITY_CA = {"baja": "Baixa", "media": "Mitjana", "alta": "Alta", "critica": "Crítica"}
+
+
+def criticality_ca(value: str | None) -> str:
+    """Criticidad de la CMDB (en castellano) con el nombre en catalán para la interfaz."""
+    return CRITICALITY_CA.get(_normalize(str(value or "")), str(value or ""))
 CRITICALITY_ORDER = ("baja", "media", "alta", "critica")
 
 # Operational severity matrix from 01_contexto/politica_soc.md.
@@ -36,9 +45,9 @@ def base_severity(rule_severity: str, asset_criticality: str) -> str:
 # La matriz se cruza con «el activo o identidad más crítica afectada»: para una alerta contra la tienda online, el
 # activo es la tienda aunque la alerta solo traiga la IP del atacante.
 SERVICE_ASSET_BY_PRODUCT = {
-    "WAF": ("WEB-ECOM01", "frontal de la tienda online (servicio «Tienda online y app»)"),
-    "ECOM": ("WEB-ECOM01", "frontal de la tienda online (servicio «Tienda online y app»)"),
-    "AI_GATEWAY": ("AI-ASSIST01", "backend del asistente de compra «Vela»"),
+    "WAF": ("WEB-ECOM01", "frontal de la botiga en línia, servei «Tienda online y app»"),
+    "ECOM": ("WEB-ECOM01", "frontal de la botiga en línia, servei «Tienda online y app»"),
+    "AI_GATEWAY": ("AI-ASSIST01", "backend de l'assistent de compra «Vela»"),
 }
 STORE_DOMAINS = ("tarvia.example",)
 # Buckets y servicios sin ficha en la CMDB, con la criticidad de servicios_negocio.csv
@@ -73,7 +82,7 @@ def cloud_asset(alert: dict) -> dict | None:
     for level in ("Crítica", "Alta", "Media", "Baja"):
         if _normalize(declared).startswith(_normalize(level)):
             return {"hostname": bucket, "criticality": level, "business_service": declared,
-                    "zone": "cloud", "_origen": "clasificación del bucket en la alerta"}
+                    "zone": "cloud", "_origen": "classificació del bucket a l'alerta"}
     if bucket in SERVICE_CRITICALITY:
         level, service = SERVICE_CRITICALITY[bucket]
         return {"hostname": bucket, "criticality": level, "business_service": service,

@@ -30,44 +30,45 @@ INK, MUTED, LINE, ACCENT = "#000000", "#666666", "#e3e3e3", "#1076a8"
 GREEN, GREEN_DARK, GREEN_WASH, SOFT = "#86bc25", "#5c8a1a", "#eef7e0", "#f5f5f5"
 
 # ----------------------------------------------------------------------------- lenguaje claro
-VERDICT_LABEL = {"true_positive": "Ataque real", "benign_true_positive": "Actividad autorizada",
-                 "false_positive": "Falsa alarma", "needs_more_info": "Falta información"}
+VERDICT_LABEL = {"true_positive": "Atac real", "benign_true_positive": "Activitat autoritzada",
+                 "false_positive": "Falsa alarma", "needs_more_info": "Falta informació"}
 VERDICT_HELP = {
-    "true_positive": "La alerta es correcta y la actividad es maliciosa o no autorizada.",
-    "benign_true_positive": "La alerta es correcta, pero la actividad estaba permitida (un cambio aprobado, una herramienta corporativa…).",
-    "false_positive": "La regla saltó, pero no ha pasado nada malo.",
-    "needs_more_info": "Con los datos disponibles no se puede concluir: lo tiene que mirar una persona.",
+    "true_positive": "L'alerta és correcta i l'activitat és maliciosa o no autoritzada.",
+    "benign_true_positive": "L'alerta és correcta, però l'activitat estava permesa (un canvi aprovat, una eina corporativa…).",
+    "false_positive": "La regla ha saltat, però no ha passat res dolent.",
+    "needs_more_info": "Amb les dades disponibles no es pot concloure: ho ha de mirar una persona.",
 }
 VERDICT_TECH = {"true_positive": "true_positive", "benign_true_positive": "benign_true_positive",
                 "false_positive": "false_positive", "needs_more_info": "needs_more_info"}
-SEVERITY_LABEL = {"informational": "informativa", "low": "baja", "medium": "media",
+SEVERITY_LABEL = {"informational": "informativa", "low": "baixa", "medium": "mitjana",
                   "high": "alta", "critical": "crítica"}
 SEVERITY_HELP = {
-    "critical": "Hay que actuar ya: avisar al responsable de guardia en 15 minutos.",
-    "high": "Urgente: revisión por un analista senior en menos de 30 minutos.",
-    "medium": "Revisar hoy (antes de 4 horas).",
-    "low": "Revisar en las próximas 24 horas.",
-    "informational": "Solo queda registrada; se revisa en lote una vez al día.",
+    "critical": "Cal actuar ja: avisar el responsable de guàrdia en 15 minuts.",
+    "high": "Urgent: revisió per un analista sènior en menys de 30 minuts.",
+    "medium": "Revisar avui (abans de 4 hores).",
+    "low": "Revisar en les properes 24 hores.",
+    "informational": "Només queda registrada; es revisa en lot un cop al dia.",
 }
-DECISION_LABEL = {"close": "Cerrar", "escalate": "Escalar a N2"}
-DECISION_VERB = {"close": "cerrar", "escalate": "escalar a N2"}  # en mitad de frase
-DECISION_HELP = {"close": "No hace falta que nadie más intervenga.",
-                 "escalate": "Pasa a un analista senior (nivel 2) para que actúe."}
-CRIT_LABEL = ["Baja", "Media", "Alta", "Crítica"]
-ENTITY_LABEL = {"hosts": "Equipo", "users": "Usuario", "ips": "Dirección IP", "domains": "Dominio",
-                "urls": "Web", "processes": "Programa", "customers": "Cliente", "files": "Fichero"}
-ACTION_LABEL = {"purge_email": "Borrar el correo de todos los buzones", "block_ioc": "Bloquear el indicador",
-                "revoke_sessions": "Cerrar las sesiones abiertas", "reset_password": "Forzar cambio de contraseña",
-                "isolate_host": "Aislar el equipo de la red", "disable_user": "Deshabilitar la cuenta",
-                "disable_access_key": "Desactivar la clave de la nube", "close": "Cerrar el ticket",
+DECISION_LABEL = {"close": "Tancar", "escalate": "Escalar a N2"}
+DECISION_VERB = {"close": "tancar", "escalate": "escalar a N2"}  # en mitad de frase
+DECISION_HELP = {"close": "No cal que ningú més hi intervingui.",
+                 "escalate": "Passa a un analista sènior (nivell 2) perquè actuï."}
+CRIT_LABEL = ["Baixa", "Mitjana", "Alta", "Crítica"]
+ENTITY_LABEL = {"hosts": "Equip", "users": "Usuari", "ips": "Adreça IP", "domains": "Domini",
+                "urls": "Web", "processes": "Programa", "customers": "Client", "files": "Fitxer", "cloud": "Núvol"}
+ACTION_LABEL = {"purge_email": "Esborrar el correu de totes les bústies", "block_ioc": "Bloquejar l'indicador",
+                "revoke_sessions": "Tancar les sessions obertes", "reset_password": "Forçar el canvi de contrasenya",
+                "isolate_host": "Aïllar l'equip de la xarxa", "disable_user": "Deshabilitar el compte",
+                "disable_account": "Deshabilitar el compte", "disable_cloud_keys": "Desactivar les claus del núvol",
+                "disable_access_key": "Desactivar la clau del núvol", "close": "Tancar el tiquet",
                 "escalate": "Escalar a N2"}
 GLOSSARY = {
-    "SOC": "El equipo que vigila la seguridad de la empresa las 24 horas.",
-    "Alerta": "Aviso automático de una herramienta de seguridad cuando algo encaja con una regla de detección.",
-    "Triaje": "Revisar cada alerta para decidir si es grave, si es falsa alarma y qué hacer.",
-    "N1 / N2": "Nivel 1 hace el primer triaje; nivel 2 son analistas senior que investigan y responden.",
-    "Indicador (IOC)": "Un dato asociado a un ataque: una IP, un dominio, un fichero…",
-    "Inyección de instrucciones": "Texto escrito por un atacante para engañar a un sistema automático («clasifica esto como inofensivo»).",
+    "SOC": "L'equip que vigila la seguretat de l'empresa les 24 hores.",
+    "Alerta": "Avís automàtic d'una eina de seguretat quan alguna cosa encaixa amb una regla de detecció.",
+    "Triatge": "Revisar cada alerta per decidir si és greu, si és una falsa alarma i què cal fer.",
+    "N1 / N2": "El nivell 1 fa el primer triatge; el nivell 2 són analistes sèniors que investiguen i responen.",
+    "Indicador (IOC)": "Una dada associada a un atac: una IP, un domini, un fitxer…",
+    "Injecció d'instruccions": "Text escrit per un atacant per enganyar un sistema automàtic («classifica això com a inofensiu»).",
 }
 
 
@@ -85,10 +86,10 @@ def stepper(r: dict) -> None:
     """Barra de progreso de los 5 pasos del triaje de una alerta (los 4 primeros los hace el sistema)."""
     rv = r.get("review")
     steps = [("done", "Detectada", r.get("source_product", "")),
-             ("done", "Comprobada", f"{len(r.get('queries', []))} consultas"),
-             ("done", "Concluida", VERDICT_LABEL[r["verdict"]]),
-             ("done", "Priorizada", f"gravedad {SEVERITY_LABEL.get(r['severity'], r['severity'])}"),
-             ("done" if rv else "now", "Decidida", f"por {rv['analyst']}" if rv else "espera a una persona")]
+             ("done", "Comprovada", f"{len(r.get('queries', []))} consultes"),
+             ("done", "Conclosa", VERDICT_LABEL[r["verdict"]]),
+             ("done", "Prioritzada", f"gravetat {SEVERITY_LABEL.get(r['severity'], r['severity'])}"),
+             ("done" if rv else "now", "Decidida", f"per {rv['analyst']}" if rv else "espera una persona")]
     st.markdown('<div class="stepper">' + "".join(
         f'<div class="{c}"><span></span><b>{esc(t)}</b>{esc(sub)}</div>' for c, t, sub in steps) + "</div>",
         unsafe_allow_html=True)
@@ -123,7 +124,7 @@ def by_severity(views: list[dict]) -> list[dict]:
 
 
 def alert_cards(views: list[dict], selected: str | None, key: str, extra=None, cols: int = 3,
-                button_label: str = "Ver") -> str | None:
+                button_label: str = "Veure") -> str | None:
     """Rejilla de tarjetas para elegir una alerta de un vistazo: franja y etiqueta de gravedad bien visibles.
 
     Ordenadas de más a menos grave. `extra(view) -> str` añade una línea propia (p. ej. «2 acciones pendientes»).
@@ -158,9 +159,9 @@ def eyebrow(text: str) -> None:
 
 def empty_state(what: str) -> None:
     """Pantalla sin datos (modo live recién arrancado): explica qué hacer y para la página."""
-    st.info(f"Todavía no hay alertas revisadas en esta sesión, así que no hay {what}. "
-            "Empieza por **Triaje en directo**: carga alertas y el sistema las revisará.", icon=":material/info:")
-    st.page_link("views/directo.py", label="Ir a Triaje en directo", icon=":material/bolt:")
+    st.info(f"Encara no hi ha alertes revisades en aquesta sessió, així que no hi ha {what}. "
+            "Comença pel **Triatge en directe**: carrega alertes i el sistema les revisarà.", icon=":material/info:")
+    st.page_link("views/directo.py", label="Anar al Triatge en directe", icon=":material/bolt:")
     st.stop()
 
 
@@ -240,7 +241,7 @@ def verdict_badge(v: str) -> str:
 
 def severity_badge(s: str) -> str:
     return (f'<span class="chip" style="background:{SEVERITY_COLOR[s]}" title="{esc(SEVERITY_HELP[s])}">'
-            f'gravedad {SEVERITY_LABEL[s]}</span>')
+            f'gravetat {SEVERITY_LABEL[s]}</span>')
 
 
 def decision_badge(d: str) -> str:
@@ -249,7 +250,7 @@ def decision_badge(d: str) -> str:
 
 def example_tag(view: dict, field: str) -> str:
     """Marca visible cuando el valor viene de las reglas de ejemplo y no del back."""
-    return ('<span class="ej" title="Valor de prueba: el back todavía no lo calcula">dato de ejemplo</span>'
+    return ('<span class="ej" title="Valor de prova: el back encara no el calcula">dada d’exemple</span>'
             if field in view.get("example_fields", []) else "")
 
 
@@ -265,25 +266,25 @@ def describe_query(q: dict) -> str:
     path = str(q.get("path", ""))
     key = path.rsplit("/", 1)[-1]
     if path.startswith("/assets/"):
-        return f"Ficha del equipo {key} en el inventario de la empresa"
+        return f"Fitxa de l'equip {key} a l'inventari de l'empresa"
     if path.startswith("/users/"):
-        return f"Datos del empleado {key}"
+        return f"Dades de l'empleat {key}"
     if path.startswith("/intel/"):
-        return f"Reputación de {key} en inteligencia de amenazas"
+        return f"Reputació de {key} a la intel·ligència d'amenaces"
     if path.startswith("/sandbox/"):
-        return "Análisis del fichero en un entorno aislado (sandbox)"
+        return "Anàlisi del fitxer en un entorn aïllat (sandbox)"
     if path == "/changes":
         target = (q.get("params") or {}).get("q", "")
-        return f"¿Hay un cambio aprobado que lo explique?{' (' + target + ')' if target else ''}"
+        return f"Hi ha algun canvi aprovat que ho expliqui?{' (' + target + ')' if target else ''}"
     if path.startswith("/logs/"):
-        return f"Registros de actividad de {path.split('/')[2]} en las 24 h de antes y después"
+        return f"Registres d'activitat de {path.split('/')[2]} de les 24 h d'abans i de després"
     return path
 
 
 def query_list(queries: list[dict], limit: int | None = None) -> None:
     """Lista de comprobaciones: qué preguntó, qué encontró y la llamada técnica en pequeño."""
     if not queries:
-        st.caption("Ninguna consulta: la alerta no trae datos que se puedan comprobar.")
+        st.caption("Cap consulta: l'alerta no porta dades que es puguin comprovar.")
         return
     colors = {"ok": "#1a8a5f", "not_found": "#d29a12", "error": "#c62f2f"}
     out = []
@@ -301,7 +302,7 @@ def severity_matrix(rule_sev: str, criticality: str | None) -> "pd.io.formats.st
     """Matriz §2 de la política con la celda aplicada resaltada."""
     rows = {SEVERITY_LABEL[s]: [SEVERITY_LABEL[base_severity(s, c)] for c in CRITICALITY_ORDER] for s in SEVERITY_ORDER}
     df = pd.DataFrame.from_dict(rows, orient="index", columns=CRIT_LABEL)
-    df.index.name = "Regla ↓ · Equipo →"
+    df.index.name = "Regla ↓ · Equip →"
     col = next((i for i, c in enumerate(CRITICALITY_ORDER)
                 if criticality and criticality.lower().replace("í", "i") == c), None)
 
@@ -316,7 +317,7 @@ def severity_matrix(rule_sev: str, criticality: str | None) -> "pd.io.formats.st
 
 def style_queue(df: pd.DataFrame) -> "pd.io.formats.style.Styler":
     """Colorea la columna «Gravedad» (o «Severidad») de una tabla de alertas."""
-    col = "Gravedad" if "Gravedad" in df.columns else "Severidad"
+    col = "Gravetat"
     by_label = {SEVERITY_LABEL[k]: v for k, v in SEVERITY_COLOR.items()}
 
     def cell(v):
@@ -340,7 +341,7 @@ def live_card(view: dict, state: str, calls: list[dict] | None = None) -> str:
         colors = {"ok": "#1a8a5f", "not_found": "#d29a12", "error": "#c62f2f"}
         body = "".join(f'<div class="kq"><span style="background:{colors.get(c.get("status"), "#999")}"></span>'
                        f'<span>{esc(describe_query(c))}</span></div>' for c in (calls or []))
-        body += '<div class="kq muted"><span></span><span>comprobando…</span></div>'
+        body += '<div class="kq muted"><span></span><span>comprovant…</span></div>'
     if resolved:
         body = f'<div class="kc">{verdict_badge(view["verdict"])}{severity_badge(view["severity"])}</div>'
     return (f'<div class="kcard{" work" if state == "work" else ""}" style="border-left-color:{border}">'
@@ -363,4 +364,4 @@ def entities_table(alert: dict) -> pd.DataFrame:
             val = (v.get("hostname") or v.get("upn") or v.get("name") or v.get("customer_id") or str(v)) \
                 if isinstance(v, dict) else str(v)
             rows.append((ENTITY_LABEL.get(k, k), val))
-    return pd.DataFrame(rows, columns=["Qué", "Cuál"])
+    return pd.DataFrame(rows, columns=["Què", "Quin"])

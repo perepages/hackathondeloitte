@@ -67,7 +67,7 @@ def test_respuesta_invalida_del_llm_usa_las_reglas(monkeypatch):
     out = _decide(_preview(evidence={"sender": "news@shop.example", "subject": "Ofertas"}))
     assert out.decision_source == "rules"
     assert out.verdict == "false_positive" and out.decision == "close"
-    assert any("reglas" in n for n in out.decision_notes)
+    assert any("regles" in n for n in out.decision_notes)
 
 
 def test_aprobaciones_y_red_ot(monkeypatch):
@@ -86,7 +86,7 @@ def test_aprobaciones_y_red_ot(monkeypatch):
     assert acts[("block_ioc", "evil.example")] is False
     assert acts[("block_ioc", "mega.nz")] is True  # uso dual: con N2
     assert ("borrar_todo", "x") not in acts
-    assert ("escalate", "Responsable de Operaciones") in acts
+    assert ("escalate", "Responsable d'Operacions") in acts
 
 
 def test_objetivos_con_texto_se_separan_en_valores_exactos():

@@ -1,4 +1,4 @@
-"""Inicio: qué es esto, cómo funciona y por dónde seguir la demo. Dueño: PERSONA A.
+"""Inicio: qué es esto, cómo funciona y por dónde seguir la demo. Dueño: PERSONA A. Textos en catalán.
 
 Pensado para alguien que no trabaja en un SOC: primero la idea en una frase, luego el flujo
 en 4 pasos, las cifras y el recorrido guiado por el resto de páginas.
@@ -11,75 +11,71 @@ rows = data.load_results()
 n = len(rows)
 esc_n = sum(r["decision"] == "escalate" for r in rows)
 real = sum(r["verdict"] == "true_positive" for r in rows)
-reviewed = sum(bool(r["review"]) for r in rows)
 
-st.title("Triaje de alertas de seguridad")
+st.title("Triatge d'alertes de seguretat")
 st.markdown(
-    '<p class="big">Las herramientas de seguridad de Tarvia lanzan <b>más de 11.000 avisos al mes</b>, y la mayoría '
-    "son falsas alarmas. Este sistema revisa cada aviso como lo haría un analista: <b>comprueba los datos, explica "
-    "qué ha pasado y propone qué hacer</b>. La última palabra la tiene siempre una persona.</p>",
+    '<p class="big">Les eines de seguretat de Tarvia llancen <b>més d\'11.000 avisos al mes</b>, i la majoria '
+    "són falses alarmes. Aquest sistema revisa cada avís com ho faria un analista: <b>comprova les dades, explica "
+    "què ha passat i proposa què cal fer</b>. L'última paraula la té sempre una persona.</p>",
     unsafe_allow_html=True)
 
 st.markdown("""<div class="flow">
-  <div><i>PASO 1</i><b>Llega una alerta</b><span>Una herramienta (correo, antivirus, firewall, web…) avisa de algo
-  sospechoso.</span></div>
-  <div><i>PASO 2</i><b>El sistema investiga</b><span>Consulta el inventario de equipos, los datos del empleado, la
-  inteligencia de amenazas y los registros de actividad.</span></div>
-  <div><i>PASO 3</i><b>Propone una conclusión</b><span>Ataque real, falsa alarma o actividad autorizada; cuánto
-  importa y qué hacer.</span></div>
-  <div><i>PASO 4</i><b>Una persona decide</b><span>El analista acepta o corrige. Ninguna acción se ejecuta sin su
-  aprobación.</span></div>
+  <div><i>PAS 1</i><b>Arriba una alerta</b><span>Una eina (correu, antivirus, tallafocs, web…) avisa d'alguna cosa
+  sospitosa.</span></div>
+  <div><i>PAS 2</i><b>El sistema investiga</b><span>Consulta l'inventari d'equips, les dades de l'empleat, la
+  intel·ligència d'amenaces i els registres d'activitat.</span></div>
+  <div><i>PAS 3</i><b>Proposa una conclusió</b><span>Atac real, falsa alarma o activitat autoritzada; quant
+  importa i què cal fer.</span></div>
+  <div><i>PAS 4</i><b>Una persona decideix</b><span>L'analista accepta o corregeix. Cap acció s'executa sense la
+  seva aprovació.</span></div>
 </div>""", unsafe_allow_html=True)
 
 st.write("")
 m = st.columns(4)
-m[0].metric("Alertas revisadas", n, help="Muestra de desarrollo que Deloitte facilita para el reto.")
-m[1].metric("Se cierran sin intervención", f"{round(100 * (n - esc_n) / max(1, n))} %",
-            help="El sistema concluye que no hace falta nadie más y lo deja justificado.")
-m[2].metric("Necesitan a una persona", esc_n, help="Se escalan a un analista senior (nivel 2).")
-m[3].metric("Ataques reales detectados", real)
-if any("verdict" in r["example_fields"] for r in rows):
-    st.caption("Las conclusiones de esta muestra salen de reglas de prueba mientras el motor definitivo se termina. "
-               "Las comprobaciones (paso 2) sí son las reales.")
-elif rows:
-    by_llm = sum(r.get("decision_source") == "llm" for r in rows)
-    st.caption(f"Conclusiones propuestas por la IA en {by_llm} de {n} alertas (el resto, por las reglas de "
-               "respaldo), siempre con la política del SOC aplicada encima. Decide una persona.")
+m[0].metric("Alertes revisades", n, help="Mostra d'alertes que Deloitte facilita per al repte.")
+m[1].metric("Es tanquen sense intervenció", f"{round(100 * (n - esc_n) / max(1, n))} %",
+            help="El sistema conclou que no cal ningú més i ho deixa justificat.")
+m[2].metric("Necessiten una persona", esc_n, help="S'escalen a un analista sènior (nivell 2).")
+m[3].metric("Atacs reals detectats", real)
+if rows and not any("verdict" in r["example_fields"] for r in rows):
+    st.caption("Cada conclusió la proposa la IA i la contrasten les regles dels runbooks del SOC; a sobre s'hi "
+               "aplica sempre la política del SOC. Decideix una persona.")
 
-st.subheader("Recorrido de la demo", anchor=False)
-st.caption("En este orden se entiende todo en cinco minutos.")
+st.subheader("Recorregut", anchor=False)
+st.caption("En aquest ordre s'entén tot en cinc minuts.")
 tour = [
-    ("views/directo.py", ":material/bolt:", "1 · Triaje en directo",
-     "Entran 10 alertas y se ve cómo el sistema las revisa una a una: cuáles cierra y cuáles deja a una persona."),
-    ("views/cola.py", ":material/inbox:", "2 · Alertas",
-     f"La bandeja del analista. Al abrir una alerta se ve qué ha pasado, qué ha comprobado el sistema y por qué "
-     f"concluye lo que concluye. Aquí decide la persona ({reviewed} revisadas hasta ahora)."),
-    ("views/ticket.py", ":material/description:", "3 · Informe para N2",
-     "Lo que recibe el analista senior: un resumen listo para actuar, en el formato oficial de Deloitte."),
-    ("views/contencion.py", ":material/shield:", "4 · Acciones de respuesta",
-     "Aislar un equipo, bloquear una IP… El sistema las propone; solo se ejecutan con aprobación."),
-    ("views/panel.py", ":material/insights:", "5 · Resumen",
-     "Para dirección: cuánto trabajo ahorra y qué tipo de alertas llegan."),
+    ("views/directo.py", ":material/bolt:", "1 · Triatge en directe",
+     "Entren 10 alertes i es veu com el sistema les revisa una a una: quines tanca i quines deixa a una persona."),
+    ("views/cola.py", ":material/inbox:", "2 · Alertes",
+     "La safata de l'analista. En obrir una alerta es veu què ha passat, què ha comprovat el sistema i per què "
+     "conclou el que conclou. Aquí decideix la persona."),
+    ("views/ticket.py", ":material/description:", "3 · Informe per a N2",
+     "El que rep l'analista sènior: un resum a punt per actuar, en el format oficial de Deloitte."),
+    ("views/contencion.py", ":material/shield:", "4 · Accions de resposta",
+     "Aïllar un equip, bloquejar una IP… El sistema les proposa; només s'executen amb aprovació."),
+    ("views/panel.py", ":material/insights:", "5 · Resum",
+     "Per a la direcció: quanta feina estalvia i quin tipus d'alertes arriben."),
 ]
 for path, icon, title, text in tour:
     with st.container(border=True):
         c1, c2 = st.columns([5, 2], vertical_alignment="center")
         c1.markdown(f"**{title}**  \n<span class='muted'>{ui.esc(text)}</span>", unsafe_allow_html=True)
-        c2.page_link(path, label="Abrir", icon=icon, use_container_width=True)
+        c2.page_link(path, label="Obrir", icon=icon, use_container_width=True)
 
 c1, c2 = st.columns(2, gap="large")
 with c1:
-    st.subheader("Qué hace el sistema y qué hace la persona", anchor=False)
+    st.subheader("Què fa el sistema i què fa la persona", anchor=False)
     st.table({
-        "El sistema": ["Lee la alerta y extrae equipos, usuarios, IPs…", "Consulta inventario, empleados, "
-                       "inteligencia y registros", "Propone conclusión, gravedad y acciones", "Explica en qué se basa"],
-        "La persona": ["—", "Puede revisar cada consulta y su resultado", "Acepta o corrige la propuesta",
-                       "Aprueba (o no) cada acción de respuesta"],
+        "El sistema": ["Llegeix l'alerta i n'extreu equips, usuaris, IP…", "Consulta l'inventari, els empleats, "
+                       "la intel·ligència i els registres", "Proposa conclusió, gravetat i accions",
+                       "Explica en què es basa"],
+        "La persona": ["—", "Pot revisar cada consulta i el seu resultat", "Accepta o corregeix la proposta",
+                       "Aprova (o no) cada acció de resposta"],
     })
 with c2:
-    st.subheader("Palabras que salen en la demo", anchor=False)
+    st.subheader("Paraules que surten a la demo", anchor=False)
     for term, meaning in ui.GLOSSARY.items():
         st.markdown(f"**{term}.** {meaning}")
-    with st.expander("Las cuatro conclusiones posibles"):
+    with st.expander("Les quatre conclusions possibles"):
         for v in ui.VERDICT_ORDER:
             st.markdown(f"{ui.verdict_badge(v)} {ui.esc(ui.VERDICT_HELP[v])}", unsafe_allow_html=True)

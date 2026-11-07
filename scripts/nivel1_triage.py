@@ -141,11 +141,11 @@ def r_waf(a, ctx, bad):
     ev = a["evidence"]
     if ev.get("action") == "blocked":
         geo = next((r.get("geo") for r in ctx["intel"].values() if r and r.get("geo")), None) or {}
-        src = geo.get("as_org", "origen externo")
+        src = geo.get("as_org", "origen extern")
         return ("true_positive", 0.8,
-                f"Intento real de {ev.get('rule_msg')} ({ev.get('hits')} hits) desde {src}, "
-                "pero el WAF lo bloqueó y no hay efecto: ruido de Internet, cerrar.", -1)
-    return ("true_positive", 0.6, f"{ev.get('rule_msg')} NO bloqueado por el WAF: revisar respuesta de la app.", +1)
+                f"Intent real de {ev.get('rule_msg')} ({ev.get('hits')} peticions) des de {src}, "
+                "però el WAF el va bloquejar i no hi ha efecte: soroll d'Internet, tancar.", -1)
+    return ("true_positive", 0.6, f"{ev.get('rule_msg')} NO bloquejat pel WAF: cal revisar la resposta de l'aplicació.", +1)
 
 
 def r_phish_report(a, ctx, bad):
@@ -156,26 +156,26 @@ def r_phish_report(a, ctx, bad):
     legit = ev.get("legit_supplier_domain")
     if legit and legit.lower() != dom:
         return ("true_positive", 0.85,
-                f"Posible fraude BEC: remitente {dom} suplanta al proveedor legítimo {legit}.", +1)
+                f"Possible frau BEC: el remitent {dom} suplanta el proveïdor legítim {legit}.", +1)
     if bad:
-        return ("true_positive", 0.9, f"Phishing reportado; TIP: {'; '.join(bad)}. Purgar correo y bloquear dominio.", 0)
+        return ("true_positive", 0.9, f"Phishing reportat; TIP: {'; '.join(bad)}. Purgar el correu i bloquejar el domini.", 0)
     if dom == "tarvia.example" and "simulacro" in subj.lower():
-        return ("benign_true_positive", 0.9, "Correo del simulacro interno de phishing (RRHH): el usuario lo detectó bien.", 0)
+        return ("benign_true_positive", 0.9, "Correu del simulacre intern de phishing (RRHH): l'usuari el va detectar bé.", 0)
     if re.search(r"[a-z]0[a-z]|[a-z]1[a-z]", dom) or re.search(r"(has ganado|premio|caducad|urgente)", subj.lower()):
-        return ("true_positive", 0.7, f"Dominio/asunto con señales de engaño ({dom}: «{subj}»), sin datos en TIP.", 0)
+        return ("true_positive", 0.7, f"Domini/assumpte amb senyals d'engany ({dom}: «{subj}»), sense dades al TIP.", 0)
     if domain_reputable(dom):
-        return ("false_positive", 0.8, f"Remitente legítimo ({dom}), asunto «{subj}»: correo transaccional reportado por error.", 0)
-    return ("false_positive", 0.6, f"Newsletter/comercial de {dom} sin indicadores maliciosos (TIP sin datos ≠ limpio).", 0)
+        return ("false_positive", 0.8, f"Remitent legítim ({dom}), assumpte «{subj}»: correu transaccional reportat per error.", 0)
+    return ("false_positive", 0.6, f"Butlletí comercial de {dom} sense indicadors maliciosos (TIP sense dades ≠ net).", 0)
 
 
 def r_encoded_ps(a, ctx, bad):
     ev = a["evidence"]
     if "CcmExec" in ev.get("parent", "") and ev.get("user") == "SYSTEM":
         chg = api_get("/changes", q="SCCM") or []
-        cite = chg[0]["id"] if chg else "sin cambio localizado"
+        cite = chg[0]["id"] if chg else "sense canvi localitzat"
         return ("benign_true_positive", 0.9,
-                f"PowerShell codificado lanzado por el agente SCCM como SYSTEM (inventario de software). Cambio aprobado {cite}.", 0)
-    return ("needs_more_info", 0.5, f"PowerShell codificado con padre {ev.get('parent')}: decodificar y revisar.", 0)
+                f"PowerShell codificat llançat per l'agent SCCM com a SYSTEM (inventari de programari). Canvi aprovat {cite}.", 0)
+    return ("needs_more_info", 0.5, f"PowerShell codificat amb procés pare {ev.get('parent')}: cal descodificar-lo i revisar-lo.", 0)
 
 
 def r_impossible_travel(a, ctx, bad):
@@ -187,41 +187,41 @@ def r_impossible_travel(a, ctx, bad):
     if anon or post:
         why = []
         if anon:
-            why.append("login desde " + ", ".join(g.get("as_org", "?") for g in anon))
+            why.append("inici de sessió des de " + ", ".join(g.get("as_org", "?") for g in anon))
         if post:
-            why.append("acciones posteriores: " + ", ".join(post))
-        return ("true_positive", 0.75, "Posible cuenta comprometida: " + "; ".join(why) + ".", +1)
+            why.append("accions posteriors: " + ", ".join(post))
+        return ("true_positive", 0.75, "Possible compte compromès: " + "; ".join(why) + ".", +1)
     if known_dev:
         relay = [g.get("as_org") for g in geos if "Relay" in str(g.get("as_org"))]
-        extra = f" La IP lejana es {relay[0]}." if relay else ""
-        return ("false_positive", 0.8, f"Dispositivo corporativo conocido y conforme, sin anonimizadores ni acciones raras.{extra}", 0)
-    return ("needs_more_info", 0.5, "Viaje imposible con dispositivo no reconocido: verificar con el usuario.", 0)
+        extra = f" La IP llunyana és {relay[0]}." if relay else ""
+        return ("false_positive", 0.8, f"Dispositiu corporatiu conegut i conforme, sense anonimitzadors ni accions estranyes.{extra}", 0)
+    return ("needs_more_info", 0.5, "Viatge impossible amb un dispositiu no reconegut: cal verificar-ho amb l'usuari.", 0)
 
 
 def r_beacon(a, ctx, bad):
     dom = a["evidence"].get("domain", "")
     if bad:
-        return ("true_positive", 0.9, f"Beaconing a C2 conocido: {'; '.join(bad)}. Aislar puesto (con aprobación N2).", +1)
+        return ("true_positive", 0.9, f"Beaconing cap a un C2 conegut: {'; '.join(bad)}. Aïllar l'equip (amb aprovació N2).", +1)
     if domain_reputable(dom) or dom.endswith("tarvia-printers.example") or "bmc-agent" in dom:
-        return ("false_positive", 0.8, f"Beaconing a servicio legítimo/de gestión ({dom}): telemetría periódica esperada.", 0)
-    return ("needs_more_info", 0.5, f"Beaconing a {dom} sin reputación en TIP (desconocido ≠ limpio).", 0)
+        return ("false_positive", 0.8, f"Beaconing cap a un servei legítim o de gestió ({dom}): telemetria periòdica esperada.", 0)
+    return ("needs_more_info", 0.5, f"Beaconing cap a {dom} sense reputació al TIP (desconegut ≠ net).", 0)
 
 
 def r_dga(a, ctx, bad):
     pd_ = a["evidence"].get("parent_domain", "")
     if bad:
-        return ("true_positive", 0.85, f"Dominio de alta entropía con mala reputación: {'; '.join(bad)}.", 0)
+        return ("true_positive", 0.85, f"Domini d'alta entropia amb mala reputació: {'; '.join(bad)}.", 0)
     if domain_reputable(pd_):
-        return ("false_positive", 0.85, f"Subdominio aleatorio de un CDN/cloud legítimo ({pd_}), patrón normal.", 0)
-    return ("needs_more_info", 0.5, f"Dominio DGA bajo {pd_} sin reputación conocida.", 0)
+        return ("false_positive", 0.85, f"Subdomini aleatori d'un CDN o núvol legítim ({pd_}), patró normal.", 0)
+    return ("needs_more_info", 0.5, f"Domini DGA sota {pd_} sense reputació coneguda.", 0)
 
 
 def r_office_child(a, ctx, bad):
     ev = a["evidence"]
     tree = ev.get("process_tree", "")
     if ev.get("signer") and tree.endswith("saplogon.exe"):
-        return ("benign_true_positive", 0.85, f"{tree} firmado por {ev['signer']}: integración Excel-SAP habitual.", 0)
-    return ("true_positive", 0.7, f"Cadena de procesos sospechosa sin firma: {tree}. Posible ejecución maliciosa.", +1)
+        return ("benign_true_positive", 0.85, f"{tree} signat per {ev['signer']}: integració Excel-SAP habitual.", 0)
+    return ("true_positive", 0.7, f"Cadena de processos sospitosa sense signatura: {tree}. Possible execució maliciosa.", +1)
 
 
 INJECTION_HINTS = re.compile(
@@ -232,16 +232,16 @@ INJECTION_HINTS = re.compile(
 def r_ai_injection(a, ctx, bad):
     ex = a["evidence"].get("prompt_excerpt", "")
     if INJECTION_HINTS.search(ex):
-        return ("true_positive", 0.75, f"Intento de manipular el asistente: «{ex[:80]}».", 0)
-    return ("false_positive", 0.8, f"Frase normal de cliente que el guardarraíl confundió con injection: «{ex[:80]}».", 0)
+        return ("true_positive", 0.75, f"Intent de manipular l'assistent: «{ex[:80]}».", 0)
+    return ("false_positive", 0.8, f"Frase normal d'un client que el filtre va confondre amb una injecció: «{ex[:80]}».", 0)
 
 
 def r_av(a, ctx, bad):
     ev = a["evidence"]
     if not ev.get("executed") and ev.get("action") in ("quarantined", "blocked"):
         return ("true_positive", 0.85,
-                f"Malware {ev.get('detection_name')} detectado y {ev['action']} por el AV sin ejecutarse.", -1)
-    return ("true_positive", 0.8, f"Malware {ev.get('detection_name')} con ejecución o sin bloquear.", +1)
+                f"Programari maliciós {ev.get('detection_name')} detectat i {ev['action']} per l'antivirus sense executar-se.", -1)
+    return ("true_positive", 0.8, f"Programari maliciós {ev.get('detection_name')} executat o sense bloquejar.", +1)
 
 
 RULES = {
@@ -259,8 +259,8 @@ RULES = {
 
 def r_default(a, ctx, bad):
     if bad:
-        return ("true_positive", 0.7, f"Indicadores con mala reputación: {'; '.join(bad)}.", 0)
-    return ("needs_more_info", 0.4, f"Regla {a['rule_id']} sin lógica N1 automática todavía: revisión humana.", 0)
+        return ("true_positive", 0.7, f"Indicadors amb mala reputació: {'; '.join(bad)}.", 0)
+    return ("needs_more_info", 0.4, f"La regla {a['rule_id']} encara no té lògica N1 automàtica: revisió humana.", 0)
 
 
 # --------------------------------------------------------------------------- triaje

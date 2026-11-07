@@ -3,22 +3,22 @@
  "origen_propuesta": {
   "llm": 150
  },
- "mismo_veredicto": 127,
+ "mismo_veredicto": 131,
  "misma_decision": 142,
  "veredictos_back": {
-  "benign_true_positive": 37,
-  "false_positive": 47,
-  "true_positive": 66
+  "benign_true_positive": 36,
+  "false_positive": 49,
+  "true_positive": 65
  },
  "decisiones_back": {
   "close": 128,
   "escalate": 22
  },
  "discrepancias_por_regla": {
-  "UC-IDP-001": 3,
   "UC-VPN-001": 3,
   "UC-NET-006": 3,
   "UC-WEB-003": 2,
+  "UC-EML-001": 2,
   "UC-EDR-003": 2,
   "UC-EML-003": 1,
   "UC-DLP-001": 1,
@@ -28,8 +28,6 @@
   "UC-WEB-002": 1,
   "UC-NET-001": 1,
   "UC-IDP-008": 1,
-  "UC-EDR-002": 1,
-  "UC-EML-001": 1,
   "UC-CLD-003": 1
  },
  "discrepancias": [
@@ -40,13 +38,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "critical",
-    "confidence": 0.82,
-    "justification": "La regla es alta y describe un clic real en una URL reescificada como phishing (T1566.002, Spearphishing Link) contra un activo de criticidad media (WS-BCN-1380). El dominio tarvia-sso-login.example no es un subdominio de un CDN/cloud legítimo ni un activo corporativo conocido, y el remitente firma-electronica-docs.example carece de dmarc (dmarc=none) pese a spf/dkim pass, lo que es coherente con suplantación. No hay cambios aprobidos que cubran la alerta y no hay inteligencia que lo confirme como benigno. Al ser clic en enlace de SSO con posible robo de credenciales, la ejecución/acceso queda confirmado más allá de una simple conexión, por lo que subo la severidad +1. La IP de inteligencia (203.0.113.45) es hosting en Ámsterdam, sin descartar malicia."
+    "confidence": 0.85,
+    "justification": "La regla de clic en URL de phishing ha reescrit l'enllaç https://tarvia-sso-login.example/auth/v2/sso com a phishing després de la entrega. L'actiu WS-BCN-1380 és un portátil de criticalitat mitjana i l'usuària té MFA per push, de manera que si hagués introduït credencials el dany seria important. El domini tarvia-sso-login.example no és un subdomini d'un CDN o cloud legítim i no té intel·ligència que el validi; el remitent firma-electronica-docs.example tampoc no és un domini corporatiu i el DMARC del missatge és 'none'. No hi ha cap cany aprovat que cobri aquesta activitat. Tot punt indica un intent real de robar credencials, encara que encara no consti que s'hagin subministrat dades."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-EML-003 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-EML-003 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -54,16 +52,16 @@
    "alert_id": "ALR-20261007-001237",
    "rule_id": "UC-DLP-001",
    "back": {
-    "verdict": "false_positive",
+    "verdict": "benign_true_positive",
     "decision": "close",
     "severity": "low",
     "confidence": 0.72,
-    "justification": "La detección cumple su función (avisa por volumen), pero no hay actividad maliciosa confirmada: el archivo no contiene datos personales (personal_data_matches: 0), el destino es un servicio de almacenamiento legítimo de uso dual con reputación benigna en inteligencia (no hay indicio malicioso), y el usuario es empleado activo del área de E-commerce con motivo de trabajo plausible (traspaso de material de campaña). No se confirma ejecución de robo de credenciales, persistencia ni fraude. La ausencia de cambios aprobados no es en sí misma carga, ya que WeTransfer es un patrón de uso dual normal y no existe evidencia de extracción de información sensible. El ajuste por volumen queda equilibrado por la ausencia de datos personales, por lo que no elevo la severidad."
+    "justification": "L'activitat és real i correcta (pujada de fitxers a un servei extern), però no sembla maliciosa: wetransfer.com és un servei conegut d'ús dual amb reputació benigna (confiança 90%), el fitxer correspon a material de una campanya corporativa i no hi ha coincidències de dades personals. No hi ha canvi aprovat que autoritzi explícitament aquesta acció, però el context de l'usuària (E-commerce) i la naturalesa del contingut (fotos de campanya) el fan coherent amb la seva feina. La manca de dades personals i l'absència de comportaments sospitjosos reforçen la interpretació d'ús legítim."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-DLP-001 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-DLP-001 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -73,35 +71,18 @@
    "back": {
     "verdict": "true_positive",
     "decision": "close",
-    "severity": "low",
-    "confidence": 0.6,
-    "justification": "La regla detecta un dominio con alta entropía y sin historial, patrón típico de DGA. El registro DNS muestra una resolución A con rcode NOERROR e IP de respuesta 198.18.34.80, lo que confirma acceso real al dominio (no una simple consulta fallida). El dominio no pertenece a un CDN/cloud legítimo (r.cdn77.example no está en la lista de proveedores confiables) y no hay cambios aprobados que lo autoricen. La ausencia de inteligencia no lo hace benigno: hay un indicio concreto de C2 potencial. La criticidad del activo es Media y no hay evidencia de ejecución posterior ni persistencia, por lo que no elevo la severidad, pero la confirmación de resolución a un patrón DGA justifica escalar para investigar el comportamiento del host."
+    "severity": "informational",
+    "confidence": 0.72,
+    "justification": "La regla detecta un domini amb alta entropía i sense historial, clarament generat per un algoritme DGA (T1568.002, C2). Les evidencies mostren una consulta real amb resposta NOERROR cap a una IP pública (198.18.34.80), així que hi ha acció confirmada, no una simple consulta. El subdomini no pertany a cap CDN o cloud lícit (cdn77.example no és un proveïdor conegut), i no hi ha cap cany aprovat que cobreixi aquesta alerta. La absència d'intel·ligència no confirma benignitat. Com que hi ha acció confirmada sense autorització, s'aplica l'ajust de -1 per gravetat baixa, però la naturalesa del C2 amb DGA justifica escalar."
    },
    "reglas": {
     "verdict": "false_positive",
     "decision": "close",
-    "justification": "Subdominio aleatorio de un CDN/cloud legítimo (r.cdn77.example), patrón normal."
+    "justification": "Subdomini aleatori d'un CDN o núvol legítim (r.cdn77.example), patró normal."
    },
    "notas": [
-    "Se cierra aunque la IA proponía escalar: gravedad low y ningún criterio de escalado obligatorio (política SOC §3 y §5)."
+    "Es tanca tot i que la IA proposava escalar: gravetat informativa i cap criteri d'escalat obligatori (política del SOC §3 i §5)."
    ]
-  },
-  {
-   "alert_id": "ALR-20261009-001917",
-   "rule_id": "UC-IDP-001",
-   "back": {
-    "verdict": "benign_true_positive",
-    "decision": "close",
-    "severity": "low",
-    "confidence": 0.92,
-    "justification": "La alerta se dispara por la incompatibilidad geográfica entre dos logins exitosos en menos de 30 minutos. Sin embargo, la evidencia muestra que el segundo acceso (Exchange Online desde París) se realiza desde un móvil corporativo conforme (device_id mob-1e6563cf, device_compliant: true) con MFA satisfied_by_session, y la IP de origen 198.18.58.60 corresponde explícitamente a la salida de Private Relay/VPN del móvil (as_org: 'Microsoft (salida de Private Relay/VPN del móvil, simulado)'). No hay indicios de cuenta comprometida: ambos eventos son 'success' sin failure_reason, el usuario no es privileged ni VIP, y el dispositivo cumple las políticas. La inteligencia no marca ninguna IP como maliciosa. No existe cambio aprobado que cubra la alerta, pero la actividad es legítima por el uso del servicio corporativo de privacidad del móvil. La regla es correcta (detecta el patrón), pero la actividad está autorizada."
-   },
-   "reglas": {
-    "verdict": "false_positive",
-    "decision": "close",
-    "justification": "Dispositivo corporativo conocido y conforme, sin anonimizadores ni acciones raras. La IP lejana es Microsoft (salida de Private Relay/VPN del móvil, simulado)."
-   },
-   "notas": []
   },
   {
    "alert_id": "ALR-20261010-011827",
@@ -111,12 +92,12 @@
     "decision": "escalate",
     "severity": "critical",
     "confidence": 0.85,
-    "justification": "La regla dispara por más de 10 notificaciones MFA en menos de 15 minutos; aquí hay 27 en 9 minutos, con una secuencia de rechazos/timeout y un 'final_result: approved' que confirma el acceso tras el bombardeo. Esto es un intento de fatiga MFA real (Credential Access, T1621), no un patrón normal. La IP es salida de VPN comercial reconocida, pero eso no autoriza el comportamiento ni explica el acceso final. No existe ningún cambio aprobado (lista vacía) que cubra esta alerta, por lo que no puede usarse como justificación. La ejecución/acceso está confirmado (approved tras el bombardeo), no una simple resolución, por lo que subo severidad +1. Al haber acceso confirmado sobre la cuenta de un responsable de tienda, corresponde escalar."
+    "justification": "La regla detecta més de 10 notacions MFA en menys de 15 minuts (T1621, Multi-Factor Authentication Request Generation), una tècnica típica d'atacant que intenta forçar l'aprovació d'una sessió. Les evidencies mostren 27 sol·licituds en 9 minuts, cinc intents de sessió al Portal de l'empleat amb resultats de fallida (denegats o en temps esgotat) des de la mateixa IP, i final_result: approved, cosa que confirma l'execució i l'èxit de l'accés, no un simple resolució DNS ni connexió. La IP 198.51.100.201 no té intel·ligència maliciosa explícita però és una sortida de VPN comercial reconeguda; això no elimina l'activitat maliciosa, ja que l'atacant pot usar una VPN legítima. No hi ha canys aprovats que autoritzin aquesta activitat. Donat que hi ha confirmació d'accés i possible robatori de credencials, es considera true_positive amb ajust de severitat +1."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-IDP-003 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-IDP-003 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -128,12 +109,12 @@
     "decision": "escalate",
     "severity": "critical",
     "confidence": 0.85,
-    "justification": "La secuencia login headless > cambio de email > compra de regalo en <15 min cumple la regla de ATO/Financial Theft (T1657) sobre el activo crítico WEB-ECOM01 (frontal de tienda, criticality Crítica), lo que eleva la gravedad a critical según la matriz SOC. No es un subdominio de CDN/cloud legítimo ni una frase de cliente, y no hay cambio autorizado que lo cubra (cubre_esta_alerta=false e IPs incompatibles). La ausencia de inteligencia no basta para descartar: hay indicios concretos de toma de cuenta con beneficio económico. No consta bloqueo ni evidencia de ejecución posterior, por lo que no aplico ajuste de severidad por control bloqueador."
+    "justification": "La seqüència detectada (login headless > canvi d'email > compra de tarjeta regalo) coincideix amb la regla de presa de control de compte (ATO) i robatori econòmic (T1657). L'IP d'origen és un proxy residencial, no una IP legítima de cliente ni del pentest. El cambio aprovat CHG-2026-1042 no aplica: la seva ventana acaba el 2026-10-10 a les 18:00 hora d'Espanya (20:00 UTC) i l'alerta es creà a las 23:39 UTC, a més les IPs del pentest són 192.0.2.10-12, no 198.51.100.137. La intel·ligència confirma l'origen sospitós i no hi ha cap justificació d'autorització. L'actiu afectat (WEB-ECOM01) és crítica, per la qual cosa l'impacte potencial és màxim."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-WEB-003 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-WEB-003 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -145,12 +126,12 @@
     "decision": "escalate",
     "severity": "critical",
     "confidence": 0.85,
-    "justification": "La secuencia (login con huella headless > cambio de email a dominio tempmail-box.example > compra de tarjeta regalo con tarjeta guardada en <15 min) en un frontal web de criticidad Crítica (WEB-ECOM01, DMZ, internet-facing) constituye actividad maliciosa real compatible con ATO y robo financiero. La IP de origen es un proxy residencial de Brasil, lo que refuerza la sospecha de identidad suplantada. El cambio aprobado CHG-2026-1042 (pentest externo) tiene cubre_esta_alerta=false y además sus IPs de origen (192.0.2.10-12) no coinciden con la IP de la alerta (198.51.100.129), por lo que no autoriza la actividad. No hay registros relacionados que muestren bloqueo, así que no puede asumirse contención. La gravedad calculada es critical por matriz SOC (high × criticidad del activo)."
+    "justification": "L'activitat reals ha tingut lloc: canvi d'adreça electrònica seguit de compra de targeta de regal en un temps molt curt, amb accés confirmat (no una simple resolució DNS ni connexió) des d'una IP de proxy residencial. La regla és compatible amb presa de control de compte i robatori financer, i l'actiu afectat (frontal de botiga en línia, critico) eleva la gravitat. El pentest extern no autorixa aquesta activitat: el canvi aprovat té cobre_a_alerta=false i les IPs d'abast (192.0.2.10-12) no coincideixen amb la d'aquesta alerta. No hi ha cap justificació legítima per un canvi de correu temporal amb compra ràpida de targeta de regal."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-WEB-003 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-WEB-003 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -161,13 +142,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "medium",
-    "confidence": 0.72,
-    "justification": "La alerta confirma un acceso real y ejecutado (conexión VPN con asignación de IP 10.99.60.10, no una simple resolución DNS ni conexión pasiva), fuera de la ventana contractual y desde un origen geográfico y ASN completamente nuevos. Aunque la MFA fue aprobada y no hay inteligencia maliciosa, el patrón (proveedor accediendo de madrugada un domingo desde un país no habitual) constituye un indicio concreto de posible uso indebido de credenciales de tercero. La ejecución confirmada justifica +1; la ausencia de inteligencia y de activos afectados en CMDB limitan la confianza. No se descarta fraude de cuenta, por lo que corresponde escalar para determinar criticidad y autoría legítima."
+    "confidence": 0.85,
+    "justification": "La regla detecta un accés VPN d'una compte externa fora de la seva ventana contractual i des d'un ASN no vist (Limited Network LTD, Letònia), quan l'origen habitual és Logisoft Madrid (AS64650). L'esdeveniment VPN-0010704 confirma una connexió reeixida ('action': 'connect') amb MFA aprovada, així que l'accés s'ha executat realment, no és una resolució DNS ni una connexió ignota. Segons la política, un intento bloquejat sense activitat posterior seria true_positive amb ajust -1, però en aquest cas l'accés s'ha confirmat; com que no hi ha evidència d'ús posterior ni d'actiu afectat a la CMDB, s'aplica l'ajust -1. La activitat és maliciosa potencial (possible suplantació del proveedor), per això es escala tot i que la gravitat base és baixa."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "close",
-    "justification": "Regla UC-VPN-001 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-VPN-001 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -177,14 +158,31 @@
    "back": {
     "verdict": "true_positive",
     "decision": "escalate",
-    "severity": "high",
-    "confidence": 0.85,
-    "justification": "La regla de túnel DNS se cumple con creces: 276 consultas (>200) a subdominios largos (>40 caracteres, media 48) del mismo dominio en 1 h. Los registros muestran patrones de subdominios codificados en hexadecimal y respuestas NOERROR a 127.0.0.2, lo que indica ejecución confirmada del canal (no una simple resolución DNS fallida). No hay cambios aprobados y la inteligencia para e5.sk está vacía, por lo que no puede considerarse benigno. El patrón encaja con exfiltración de datos (T1048.003) sobre un activo de criticidad media, por lo que corresponde escalar."
+    "severity": "medium",
+    "confidence": 0.82,
+    "justification": "El patró de 276 consultes a subdominios de més de 40 caràcters amb contingut aparentment aleatori (hexadecimal) cap a un domini de terceres parts (e5.sk) encaixa amb la tècnica MITRE T1048.003 d'exfiltració de dades via DNS. La resposta 127.0.0.2 en totes les consultes no correspon a una resolució DNS legítima, sinó que indica un servei local interceptant les peticions, coherent amb un túnel o C2. El domini no apareix en intel·ligència, però això no el fa benign; les consultes confirmen execució real (no una simple resolució), així que no s'aplica l'ajust de -1 per intent bloquejat. No existeix cap cambio aprovat que cobreixi aquesta alerta, per la qual cosa no hi ha autorització coneguda."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-NET-006 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-NET-006 encara no té lògica N1 automàtica: revisió humana."
+   },
+   "notas": []
+  },
+  {
+   "alert_id": "ALR-20261014-003645",
+   "rule_id": "UC-EML-001",
+   "back": {
+    "verdict": "true_positive",
+    "decision": "escalate",
+    "severity": "medium",
+    "confidence": 0.95,
+    "justification": "La intel·ligència marca el domini micr0soft-365-billing.example com a malciós amb confiança del 90% i etiqueta de phishing, amb activitat registrada entre el 20 i el 15 d'octubre. El correu rebut per neus.mora@tarvia.example prové exactament d'aquest domini, amb verificacions de l'autenticitat fallides (SPF/DKIM/DMARC) i un enllaç cap a una ruta del mateix domini il·lícit. El domini no és cap CDN ni servei legítim, i la frase del tema no és una expressió normal de client. Tot i que el correu va ser marcat com a spam, va ser entregat i l'usuari ha interactuat reportant-lo, per la qual cosa es confirma un intent de phishing actiu dirigit a un administrador de sistema."
+   },
+   "reglas": {
+    "verdict": "true_positive",
+    "decision": "close",
+    "justification": "Phishing reportat; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar el correu i bloquejar el domini."
    },
    "notas": []
   },
@@ -192,16 +190,16 @@
    "alert_id": "ALR-20261014-003674",
    "rule_id": "UC-EDR-003",
    "back": {
-    "verdict": "benign_true_positive",
+    "verdict": "false_positive",
     "decision": "close",
     "severity": "low",
-    "confidence": 0.97,
-    "justification": "El archivo analizado es el conocido fichero de prueba EICAR, reconocido internacionalmente como estándar de validación de antivirus (detección estática por firma, score 0, sin comportamientos ni conexiones de red). El EDR lo puso en cuarentena sin ejecución (executed=false), por lo que no hay actividad maliciosa efectiva. La política indica que un artefacto conocido/legítimo de este tipo es actividad autorizada de prueba, no ataque. No hay inteligencia, ni cambios aprobados, ni indicios de que el usuario intentara descargar malware real."
+    "confidence": 0.95,
+    "justification": "La detecció 'Virus:DOS/EICAR_Test_File' coincideix exactament amb el resultat del sandbox, que identifica el fitxer com a 'Fichero de prueba EICAR' amb score 0 i sense comportaments sospitosos. El EICAR és un test de seguretat universalment reconegut, no un malware veritable. No hi ha cap canvi aprovat ni intel·ligència maliciosa associada, i l'acció de l'EDR (quarantena) ja ha neutralitzat qualsevol risc. Es considera una detecció legítima del sistema de protecció."
    },
    "reglas": {
     "verdict": "true_positive",
     "decision": "close",
-    "justification": "Malware Virus:DOS/EICAR_Test_File detectado y quarantined por el AV sin ejecutarse."
+    "justification": "Programari maliciós Virus:DOS/EICAR_Test_File detectat i quarantined per l'antivirus sense executar-se."
    },
    "notas": []
   },
@@ -213,12 +211,12 @@
     "decision": "escalate",
     "severity": "critical",
     "confidence": 0.95,
-    "justification": "La alerta dispara por descarga masiva desde un bucket crítico y las evidencias de CloudTrail confirman ejecución real: 5 eventos GetObject con errorCode vacío y bytes_transferred de decenas de MB cada uno, todos desde 2.57.121.25 con el user agent 'kali', incompatible con un proceso de backup. El contexto de inteligencia marca la IP como hosting no gestionado en Rumanía, sin ser Tor o VPN, lo que sumado al user agent sospechoso y a la ausencia de cambios aprobados constituye un indicio concreto de actividad maliciosa (robo de datos personales / copias de producción). No es un patrón normal de CDN/cloud. Por haber ejecución confirmada y robo de datos sensibles, se aplica severity_adjustment +1 y se escala."
+    "justification": "L'activitat confirma una exfiltració real de dades: execució confirmada de més de 500 crudes GetObject (1.400 en 10 minuts) sobre un actiu classificat como crític, amb transferència de ~112 GB de dades personals del CRM. L'origen de l'activitat (IP de Romania, proveïdor no gestionat) i l'ús d'un CLI d'atacant (Kali Linux) reforcen la maliciositat. La identitat 'backup-sync' és un compte de còpia de seguretat legítim, però les evidencies indiquen que ha estat compromesa o mal utilitzada. No hi ha cap canvi aprovat que cubreixi aquesta alerta, per la qual cosa no es pot justificar com a activitat autoritzada."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-CLD-004 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-CLD-004 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -229,13 +227,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "medium",
-    "confidence": 0.6,
-    "justification": "La alerta corresponde a un acceso real y confirmado (evento VPN-0010708 con action 'connect' y asignación de IP interna 10.99.60.12), no a una simple resolución DNS o conexión de tránsito. El acceso se produjo fuera de la ventana contractual y desde un ASN no visto (Limited Network LTD, hosting en Letonia), lo que constituye un indicio concreto de actividad sospechosa. No hay cambio aprobado que autorice el evento (cambios_aprobados vacío), por lo que no puede justificarse como autorizado. Aunque la regla es de severidad baja y la matriz asume criticidad Media (por no identificar activo afectado en CMDB), la ejecución confirmada del acceso justifica un ajuste de +1 que luego se reduce a -1 por no haber activo identificado ni evidencia de exfiltración. La ausencia de inteligencia maliciosa sobre la IP no lo limpia, pero los indicios (fuera de ventana + origen nuevo + ejecución) bastan para true_positive."
+    "confidence": 0.72,
+    "justification": "La connexió VPN és real i confirmada (event VPN-0010708 amb acció 'connect'), per la qual cosa no es tracta d'una simple resolució DNS ni d'una connexió passiva. L'activitat és maliciosa potencial: un usuari extern s'ha connectat fora de la seva ventana contractual i des d'un ASN no vist prèviament (Limited Network LTD, un servei d'allotjament de Lituània, frente a l'origen habitual de Madrid). La intel·ligència no marca l'IP com a maliciosa, però això no és suficient per considerar-la neta: els indicios concrets (fora de ventana + origen inèdit + servei d'allotjament) són prou sòlids. En no haver-hi cambios aprobats que cubreixen aquesta alerta, no es pot usar com a justificació. Com que l'acció s'ha bloquejat per un control (MFA obligatori) i no hi ha activitat posterior, s'aplica un ajust de gravetat de -1."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "close",
-    "justification": "Regla UC-VPN-001 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-VPN-001 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -245,14 +243,14 @@
    "back": {
     "verdict": "true_positive",
     "decision": "escalate",
-    "severity": "critical",
+    "severity": "high",
     "confidence": 0.85,
-    "justification": "La regla dispara por un pico de intentos de login automatizado contra un activo crítico internet-facing; es actividad maliciosa real (Credential Access). El cambio aprobado CHG-2026-1042 (pentest) no cubre esta alerta (cubre_esta_alerta=false) y además sus IPs de origen (192.0.2.10-12) no coinciden con la IP de la alerta (198.18.164.76), por lo que no sirve de justificación. No hay ejecución confirmada ni acceso exitoso (success_count=0), así que no corresponde +1; el rate limit activo y la ausencia de actividad posterior no reducen la severidad a -1 porque la regla es high y el activo es crítico. Al ser true_positive grave sobre un frontal de e-commerce con datos de clientes, corresponde escalar."
+    "justification": "La regla dispara per un patró típic de credential stuffing: molts intents de login fallits amb automatització sobre un actiu crític (frontal de botiga en línia, ~38% de la facturació). No hi ha cap èxit de login ni activitat posterior confirmada als registros_relacionados, així que l'atac s'ha aturat pel control del WAF. La IP d'origen és un nodu d'hosting sense reputació residencial ni VPN, coherent amb un origen d'atac, i no està coberta per cap canvi aprovat (el pentest autoritzat usa IPs i una ventana diferents). La manca d'intel·ligència no el fa net: hi ha un índex concret (pic automatitzat sobre un actiu crític). Com que no hi ha execució ni robatori confirmats, no s'aplica l'ajust de +1, però l'intent bloquejat sobre un servei internet-facing justifica mantenir la severitat."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-WEB-002 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-WEB-002 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -263,13 +261,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "high",
-    "confidence": 0.85,
-    "justification": "La regla de túnel DNS se cumple con creces: 266 consultas en 1 h, longitud media de etiqueta 52 caracteres, qtype TXT, un solo cliente (WMS01), ventana de 03:00-04:00 hora local. Los registros muestran subdominios aleatorios con sufijo de secuencia y respuestas base64 coherentes, lo que confirma ejecución real de exfiltración (no una simple resolución DNS). El activo es de criticidad Alta y está en zona LOGISTICS-IT (no OT), por lo que se puede actuar. El cambio aprobado CHG-2026-1071 no justifica la actividad porque cubre_esta_alerta=false. La ausencia de inteligencia maliciosa no elimina el veredicto: los indicios técnicos son concretos y suficientes. Por haber ejecución confirmada sobre activo crítico, la severidad sube +1."
+    "confidence": 0.92,
+    "justification": "La regla detecta més de 200 consultes en 1 h a subdominios longs, i les evidencies confirmen 266 consultes amb etiquetes aleatòries de 52 caràcters en mitjana, tipus TXT i respostes amb dades codificades en base64. El domini cdn-wms-metrics.example té 23 dies d'antiguitat i no apareix en intel·ligència, però això no el fa benign: la presència de dades reals a les respostes DNS (exfiltració executada, no una simple resolució) confirma l'activitat maliciosa. El canyi aprovat CHG-2026-1071 no serveix de justificació perquè cobre_esta_alerta és false. El WMS01 és un actiu de criticalitat Alta i la zona LOGISTICS-IT (no la zona OT LOGISTICS-OT), per la qual cosa es pot actuar. La severitat s'augmenta en +1 per confirmació d'exfiltració."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-NET-006 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-NET-006 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -280,13 +278,13 @@
     "verdict": "benign_true_positive",
     "decision": "close",
     "severity": "low",
-    "confidence": 0.85,
-    "justification": "La regla detecta beaconing a un dominio poco frecuente, pero heartbeat.bmc-agent.example no pertenece a un CDN/cloud legítimo ni está en inteligencia maliciosa (sin datos, pero la antigüedad de 2335 días y el patrón de heartbeat regular son típicos de un agente de gestión empresarial). Las 4 peticiones relacionadas son idénticas en estructura (GET /v1/ping, user_agent 'agent', status 200, bytes pequeños y constantes), sin exfiltración ni comandos. El activo es un portátil de criticidad Media en HQ-USERS, no internet-facing. Al ser actividad autorizada de herramienta corporativa sin indicios de malicia, corresponde benign_true_positive. No hay ejecución maliciosa ni acceso confirmado no autorizado, por lo que la severidad se mantiene en medium y no requiere escalar."
+    "confidence": 0.82,
+    "justification": "La regla detecta beaconing per la baixa varianza de l'interval (60 s) i que poques màquines veuen el dominii (2), però les evidencies apunten a una activitat legítima: URLs idèntiques de tipus 'ping', resposta 200 constant, mides de paquets iguals, user_agent genèric 'agent' i un dominii amb més de 6 anys d'antiguitat. No hi ha descàrregues de fitxers, ni executables, ni exfiltració, ni connexions a dominis o IPs de coneixença maliciosa, i la intel·ligència no marca el dominii com a perillós. El comportament és el típic d'un agent d'administració que reporta l'estat del dispositiu, per tant la detecció és correcta però l'activitat està autoritzada."
    },
    "reglas": {
     "verdict": "false_positive",
     "decision": "close",
-    "justification": "Beaconing a servicio legítimo/de gestión (heartbeat.bmc-agent.example): telemetría periódica esperada."
+    "justification": "Beaconing cap a un servei legítim o de gestió (heartbeat.bmc-agent.example): telemetria periòdica esperada."
    },
    "notas": []
   },
@@ -298,12 +296,12 @@
     "decision": "close",
     "severity": "low",
     "confidence": 0.95,
-    "justification": "La evidencia muestra una adición a Backup Operators realizada por adm.aferrer desde JUMP01, vinculada al ticket CHG-2026-1078. Este cambio está aprobado y tiene cubre_esta_alerta=true, por lo que autoriza explícitamente esta actividad dentro de la ventana y desde la IP de origen correcta. La cuenta es legítima (privileged, MFA FIDO2, notas indican uso exclusivo desde JUMP01) y el evento AD 4728 coincide con el detalle del cambio. No hay indicios de actividad maliciosa ni de manipulación no autorizada."
+    "justification": "La regla detecta una alta en un grup privilegiat (Backup Operators), però el canvi CHG-2026-1078 cobreix aquesta alerta (cubre_esta_alerta=true) i la seva ventana (2026-10-23 10:00–12:00 hora d'Espanya) i el detall encaixen amb l'esdeveniment 4728 registrat a les 09:04 UTC des de JUMP01 per adm.aferrer. Les altres dues modificacions aprovades (CHG-2026-1057 i CHG-2026-1063) tenen cubre_esta_alerta=false i no són rellevants. El context de la compta confirma que és un administrador cloud legítim que ha d'usar des de JUMP01, i no hi ha indicis d'execució ni d'altres activitats."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-IDP-008 sin lógica N1 automática todavía: revisión humana. Identidad VIP/privilegiada: adm.aferrer@tarvia.example."
+    "justification": "La regla UC-IDP-008 encara no té lògica N1 automàtica: revisió humana. Identidad VIP/privilegiada: adm.aferrer@tarvia.example."
    },
    "notas": []
   },
@@ -314,47 +312,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "medium",
-    "confidence": 0.75,
-    "justification": "La alerta describe un acceso real y confirmado (evento VPN-0010712 con action 'connect'), no una simple resolución DNS ni conexión efímera. El origen es un ASN no visto en el historial del proveedor y la conexión ocurre fuera de la ventana contractual, lo que constituye un indicio concreto de actividad sospechosa de acceso externo (T1133). No existe cambio aprobado que cubra esta alerta (cambios_aprobados vacío), por lo que no está autorizada. La inteligencia no confirma malicia, pero la combinación de horario atípico + origen nuevo + cuenta de terceros justifica el veredicto de positivo. Se aplica severity_adjustment -1 por no haber evidencia de transferencia de datos (0 bytes) ni activo afectado en CMDB. La criticidad del activo o identidad afectada queda sin resolver, lo que exige escalar para confirmar la intención y el alcance."
+    "confidence": 0.72,
+    "justification": "La connexió VPN és real i confirmada (event VPN-0010712 amb action 'connect'), per la qual cosa no es tracta d'una resolució DNS ni d'una connexió passiva: és un accés efectiu. L'activitat és maliciosa potencial perquè es produeix fora de la ventana contractual i des d'un ASN no vist prèviament, i no existeix cap canvi aprovat que l'autoritzi (els cambios_aprobados van buits). La intel·ligència mostra que l'IP és un servei d'allotjament de Letònia sense marca de TOR ni proxy residencial, però això no descarta l'ús il·lícit de la compte. Com que l'actiu afectat (WMS01) no consta a la CMDB i no hi ha evidència d'ús posterior, no s'aplica l'ajust de +1 per confirmació d'execució, però tampoc es pot considerar benign: és un accés extern no autoritzat que cal investigar."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "close",
-    "justification": "Regla UC-VPN-001 sin lógica N1 automática todavía: revisión humana."
-   },
-   "notas": []
-  },
-  {
-   "alert_id": "ALR-20261026-008345",
-   "rule_id": "UC-EDR-002",
-   "back": {
-    "verdict": "false_positive",
-    "decision": "close",
-    "severity": "low",
-    "confidence": 0.95,
-    "justification": "El proceso padre es CcmExec.exe, agente oficial de SCCM, firmando como Microsoft Windows y ejecutándose con integridad System; el comando descodificado es una consulta de inventario de productos de Windows dirigida a un archivo interno del propio directorio CCM, sin exfiltración, persistencia ni acceso a recursos externos. Este es un patrón normal de gestión corporativa firmada, no un uso abusivo de PowerShell codificado para evasión. No existe inteligencia maliciosa ni IOC asociado, y no hay evidencia de ejecución posterior sospechosa."
-   },
-   "reglas": {
-    "verdict": "benign_true_positive",
-    "decision": "close",
-    "justification": "PowerShell codificado lanzado por el agente SCCM como SYSTEM (inventario de software). Cambio aprobado CHG-2026-1031."
-   },
-   "notas": []
-  },
-  {
-   "alert_id": "ALR-20261026-008534",
-   "rule_id": "UC-IDP-001",
-   "back": {
-    "verdict": "true_positive",
-    "decision": "escalate",
-    "severity": "medium",
-    "confidence": 0.75,
-    "justification": "La detección se cumple con dos inicios de sesión exitosos confirmados en registros IDP (SIGN-0061108 y SIGN-0061109) desde ubicaciones geográficas incompatibles en un intervalo de menos de 30 minutos. No es una simple resolución DNS ni conexión: son accesos reales a aplicaciones (Teams y Exchange Online) con MFA satisfecha. No existe ningún cambio aprobado que cubra esta alerta (cambios_aprobados vacío), por lo que no puede considerautorizada. Aunque los dispositivos son corporativos conformes y no hay inteligencia maliciosa asociada a las IPs, la imposibilidad geográfica real constituye un indicio sólido de uso ilegítimo de credenciales válidas (T1078). La ausencia de inteligencia no limpia la alerta, y la ejecución confirmada justita mantener el veredicto como positivo."
-   },
-   "reglas": {
-    "verdict": "false_positive",
-    "decision": "close",
-    "justification": "Dispositivo corporativo conocido y conforme, sin anonimizadores ni acciones raras. La IP lejana es Microsoft (salida de Private Relay/VPN del móvil, simulado)."
+    "justification": "La regla UC-VPN-001 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -365,13 +329,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "high",
-    "confidence": 0.85,
-    "justification": "La regla de túnel DNS se cumple con creces (327 consultas, longitud media 52, qtype TXT, un único cliente). A diferencia de un subdominio aleatorio de un CDN legítimo, cdn-wms-metrics.example no es un proveedor de nube/CDN conocido (amazonaws, cloudfront, azureedge, etc.), tiene antigüedad de 32 días y las respuestas DNS transportan payloads codificados en base64, lo que confirma ejecución y exfiltración de datos reales, no solo conexión. No existe cambio aprobado que cubra esta alerta (CHG-2026-1071 tiene cubre_esta_alerta=false y además su ventana es del 16-10, no del 28-10). Es actividad maliciosa real con ejecución confirmada, por lo que corresponde +1 de severidad y escalamiento por exfiltración de datos desde un activo crítico."
+    "confidence": 0.92,
+    "justification": "L'activitat coincideix exactament amb el patró de túnel DNS (T1048.003): volum alt de consultes TXT cap a subdominios molt llargs d'un mateix domini. Les respostes TXT no són resolucions DNS normals sinó que transporten dades codificades en base64, la qual cosa confirma execució real de l'exfiltració (no una simple consulta). El domini de destinalitat és recent i no apareix en intel·ligència, però això per si sol no el fa benign. El canvi aprovat CHG-2026-1071 no autoritza aquesta activitat (cubre_esta_alerta = false) i prové d'un horari diferent. La combinació d'un actiu crític, dades codificades en les respostes i l'absència de justificació autoritzada confirma una activitat maliciosa real."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-NET-006 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-NET-006 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   },
@@ -379,16 +343,16 @@
    "alert_id": "ALR-20261028-009418",
    "rule_id": "UC-EDR-003",
    "back": {
-    "verdict": "false_positive",
+    "verdict": "benign_true_positive",
     "decision": "close",
     "severity": "low",
-    "confidence": 0.95,
-    "justification": "La detección 'Virus:DOS/EICAR_Test_File' corresponde al archivo de prueba EICAR, un patrón conocido y legítimo usado para validar la respuesta del antivirus. El sandbox confirma verdict clean con familia 'Fichero de prueba EICAR' y score 0. El EDR bloqueó el archivo antes de que se ejecutara (executed: false), sin actividad posterior. No existe inteligencia maliciosa asociada al hash ni cambios aprobados que lo justifiquen; la regla se disparó sobre un objeto de prueba, no sobre código malicioso real."
+    "confidence": 0.98,
+    "justification": "La detecció és correcta: el fitxer és exactament el estàndar EICAR (Virus:DOS/EICAR_Test_File), un test de seguretat d'antivirús sense cap component malicioso real. El sandbox confirma el verdict clean, score 0 i la família 'Fichero de prueba EICAR'. L'acció de l'EDR ha estat quarantena abans de cap execució (executed: false), i no hi ha cap activitat posterior ni canys aprovats que contradiguin aquesta conclusió. Es tracta d'una activitat autorizada de verificació, per tant benign_true_positive."
    },
    "reglas": {
     "verdict": "true_positive",
     "decision": "close",
-    "justification": "Malware Virus:DOS/EICAR_Test_File detectado y quarantined por el AV sin ejecutarse."
+    "justification": "Programari maliciós Virus:DOS/EICAR_Test_File detectat i quarantined per l'antivirus sense executar-se."
    },
    "notas": []
   },
@@ -399,30 +363,13 @@
     "verdict": "true_positive",
     "decision": "escalate",
     "severity": "medium",
-    "confidence": 0.97,
-    "justification": "La regla dispara por reporte de phishing de un usuario real, y la inteligencia confirma que el dominio micr0soft-365-billing.example es malicioso (phishing, confidence 90), así que no es un subdominio legítimo de CDN/cloud ni una frase normal: es actividad maliciosa real. El registro de correo muestra action 'delivered' (no un bloqueo), por lo que hay entrega confirmada al buzón del usuario, lo que justifica severity_adjustment +1 según la matriz SOC. No hay cambios aprobados que cubran esta alerta. El activo es un puesto de trabajo de criticidad Media con EDR, sin privilegios ni VIP, pero la entrega de un correo de phishing con dominio confirmado exige escalar para evaluar si el usuario interactuó (clic en enlace/adjunto) y contener la cuenta si es necesario."
+    "confidence": 0.95,
+    "justification": "La regla ha detectat correctament una activitat maliciosa real: un correu de phishing d'un domini ja catalogat com a maliciós per la intel·ligència del SOC (confiança 90, etiqueta phishing). Tot i que l'usuari l'ha reportat, el missatge ja ha estat entregat (acció 'delivered') amb verificació de remitent fallida i un enllaç cap al domini maliciós, la qual cosa confirma l'execució i no un simple intent. Això justifica un ajust de gravetat +1 per confirmació d'execució."
    },
    "reglas": {
     "verdict": "true_positive",
     "decision": "close",
-    "justification": "Phishing reportado; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar correo y bloquear dominio."
-   },
-   "notas": []
-  },
-  {
-   "alert_id": "ALR-20261030-010191",
-   "rule_id": "UC-IDP-001",
-   "back": {
-    "verdict": "benign_true_positive",
-    "decision": "close",
-    "severity": "low",
-    "confidence": 0.85,
-    "justification": "La regla 'Viaje imposible' dispara por dos inicios exitosos en ubicaciones incompatibles en <30 min. Sin embargo, la segunda IP (198.19.48.98) es una salida de Private Relay de Apple/Microsoft (servicio legítimo de privacidad móvil), no un acceso real desde Irlanda; la geolocalización es un artefacto del servicio de relay, no evidencia de movilidad física imposible. El dispositivo es el mismo móvil corporativo conocido y conforme en ambos casos, con MFA satisfied_by_session y acceso condicional exitoso. No hay inteligencia maliciosa, no hay cambios aprobados que cubrir, pero la actividad es coherente con uso legítimo del usuario entre su escritorio y su móvil. La regla es correcta en la detección pero la actividad está autorizada/legítima."
-   },
-   "reglas": {
-    "verdict": "false_positive",
-    "decision": "close",
-    "justification": "Dispositivo corporativo conocido y conforme, sin anonimizadores ni acciones raras. La IP lejana es Microsoft (salida de Private Relay/VPN del móvil, simulado)."
+    "justification": "Phishing reportat; TIP: micr0soft-365-billing.example = malicious (phishing, conf 90). Purgar el correu i bloquejar el domini."
    },
    "notas": []
   },
@@ -430,55 +377,42 @@
    "alert_id": "ALR-20261101-010863",
    "rule_id": "UC-CLD-003",
    "back": {
-    "verdict": "benign_true_positive",
+    "verdict": "false_positive",
     "decision": "close",
     "severity": "low",
     "confidence": 0.85,
-    "justification": "La alerta detecta un cambio de ACL/política que publica un bucket (T1537), lo que técnicamente cumple la regla. Sin embargo, la evidencia muestra que el cambio proviene de un runner interno de CI (terraform/1.9.5, IP 172.16.10.21) y el parámetro de política solo habilita GetObject para imágenes de producto, un patrón de uso legítimo de medios. No existe inteligencia maliciosa asociada, no hay identidad ni IP de origen sospechosa, y no se registra actividad posterior de exfiltración ni acceso no autorizado. La exposición es el resultado de una configuración de despliegue autorizada, no de una acción maliciosa."
+    "justification": "La regla detecta un canvi de ACL que expone un bucket, però l'origen és un servei de desplegament corporatiu (svc_ecom_deploy) executant Terraform des d'un runner intern (172.16.10.21), amb userAgent terraform/1.9.5. La política aplicada és s3:GetObject per a imatges de producte, una funció normal d'un servei d'ecommerce. No hi ha evidència d'extracció de dades, ni d'accés a informació confidencial, ni de canvis de permisos elevats. El bucket exposa recursos públics habituals (imatges), no dades personals ni credencials."
    },
    "reglas": {
     "verdict": "needs_more_info",
     "decision": "escalate",
-    "justification": "Regla UC-CLD-003 sin lógica N1 automática todavía: revisión humana."
+    "justification": "La regla UC-CLD-003 encara no té lògica N1 automàtica: revisió humana."
    },
    "notas": []
   }
  ],
  "frente_a_referencia": {
   "comparadas": 150,
-  "mismo_veredicto": 135,
-  "misma_decision": 140,
+  "mismo_veredicto": 142,
+  "misma_decision": 148,
   "discrepancias": [
-   {
-    "alert_id": "ALR-20261005-000200",
-    "rule_id": "UC-EML-001",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "escalate"
-    ],
-    "justificacion": "La regla se dispara por reporte real de phishing de un usuario, no por una frase ambigua ni un patrón CDN legítimo. El dominio sorteo-iphone17.example aparece en la inteligencia con tag 'scam' y reputación 'suspicious', lo que constituye un indicio concreto de actividad maliciosa (no es un falso pos"
-   },
-   {
-    "alert_id": "ALR-20261005-000440",
-    "rule_id": "UC-WEB-001",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "false_positive",
-     "close"
-    ],
-    "justificacion": "La actividad es maliciosa real (reconocimiento/explotación contra aplicación pública, T1190), pero fue bloqueada por el WAF sin actividad posterior ni acceso confirmado (solo un GET con status 403), por lo que corresponde true_positive con severity_adjustment -1. El cambio aprobado no autoriza la ac"
-   },
    {
     "alert_id": "ALR-20261007-001237",
     "rule_id": "UC-DLP-001",
     "este": [
+     "benign_true_positive",
+     "close"
+    ],
+    "referencia": [
+     "false_positive",
+     "close"
+    ],
+    "justificacion": "L'activitat és real i correcta (pujada de fitxers a un servei extern), però no sembla maliciosa: wetransfer.com és un servei conegut d'ús dual amb reputació benigna (confiança 90%), el fitxer correspon a material de una campanya corporativa i no hi ha coincidències de dades personals. No hi ha canvi"
+   },
+   {
+    "alert_id": "ALR-20261009-001917",
+    "rule_id": "UC-IDP-001",
+    "este": [
      "false_positive",
      "close"
     ],
@@ -486,233 +420,64 @@
      "benign_true_positive",
      "close"
     ],
-    "justificacion": "La detección cumple su función (avisa por volumen), pero no hay actividad maliciosa confirmada: el archivo no contiene datos personales (personal_data_matches: 0), el destino es un servicio de almacenamiento legítimo de uso dual con reputación benigna en inteligencia (no hay indicio malicioso), y el"
-   },
-   {
-    "alert_id": "ALR-20261007-000941",
-    "rule_id": "UC-NET-005",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "false_positive",
-     "close"
-    ],
-    "justificacion": "La regla detecta un dominio con alta entropía y sin historial, patrón típico de DGA. El registro DNS muestra una resolución A con rcode NOERROR e IP de respuesta 198.18.34.80, lo que confirma acceso real al dominio (no una simple consulta fallida). El dominio no pertenece a un CDN/cloud legítimo (r."
-   },
-   {
-    "alert_id": "ALR-20261011-011877",
-    "rule_id": "UC-VPN-001",
-    "este": [
-     "true_positive",
-     "escalate"
-    ],
-    "referencia": [
-     "benign_true_positive",
-     "escalate"
-    ],
-    "justificacion": "La alerta confirma un acceso real y ejecutado (conexión VPN con asignación de IP 10.99.60.10, no una simple resolución DNS ni conexión pasiva), fuera de la ventana contractual y desde un origen geográfico y ASN completamente nuevos. Aunque la MFA fue aprobada y no hay inteligencia maliciosa, el patr"
-   },
-   {
-    "alert_id": "ALR-20261011-002595",
-    "rule_id": "UC-EML-001",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "escalate"
-    ],
-    "justificacion": "La alerta se dispara por reporte de usuario de un correo de phishing. La inteligencia del dominio sorteo-iphone17.example lo marca como scam con reputación suspicious (confidence 60), lo que confirma que no es una falsa alarma. El correo fue entregado por el gateway (action: delivered, no blocked), "
-   },
-   {
-    "alert_id": "ALR-20261013-003419",
-    "rule_id": "UC-EDR-003",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "escalate"
-    ],
-    "justificacion": "La alerta indica detección de firma/comportamiento malicioso (PUA) con acción 'quarantined' y 'executed: false'. El registro EDR confirma que el proceso fue iniciado desde C:\\Users\\sergio.gutierrez\\Downloads\\WebCompanion.exe con integridad 'Medium' y sin firma, y que el EDR lo cuarentenó. El sandbox"
+    "justificacion": "La detecció es basa en dues ubicacions geogràfiques incompatibles temporalment, però el segon origen (198.18.58.60, París) està clarament identificat com una sortida de VPN del mòvil (Private Relay d'Apple), un comportament habitual en dispositius mòbils corporatius. Cap de les dues IPs apareix en i"
    },
    {
     "alert_id": "ALR-20261014-003645",
     "rule_id": "UC-EML-001",
     "este": [
      "true_positive",
-     "close"
+     "escalate"
     ],
     "referencia": [
      "true_positive",
-     "escalate"
+     "close"
     ],
-    "justificacion": "La alerta dispara por reporte de phishing de un usuario real (neus.mora@tarvia.example) y el dominio de origen aparece en inteligencia con reputación maliciosa confirmada (phishing, campaña de facturas, confianza 90). Los registros del correo muestran SPF fail, DKIM none y DMARC fail, coherente con "
+    "justificacion": "La intel·ligència marca el domini micr0soft-365-billing.example com a malciós amb confiança del 90% i etiqueta de phishing, amb activitat registrada entre el 20 i el 15 d'octubre. El correu rebut per neus.mora@tarvia.example prové exactament d'aquest domini, amb verificacions de l'autenticitat falli"
    },
    {
     "alert_id": "ALR-20261014-003674",
     "rule_id": "UC-EDR-003",
     "este": [
-     "benign_true_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "close"
-    ],
-    "justificacion": "El archivo analizado es el conocido fichero de prueba EICAR, reconocido internacionalmente como estándar de validación de antivirus (detección estática por firma, score 0, sin comportamientos ni conexiones de red). El EDR lo puso en cuarentena sin ejecución (executed=false), por lo que no hay activi"
-   },
-   {
-    "alert_id": "ALR-20261016-004912",
-    "rule_id": "UC-EDR-003",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "escalate"
-    ],
-    "justificacion": "La alerta indica firma/comportamiento malicioso con acción 'quarantined' y 'executed: false': el EDR bloqueó el archivo antes de que se ejecutara, por lo que no hay ejecución ni acceso confirmado. El sandbox valida la naturaleza PUA (score 45, familia PUA, detección estática por firma, sin comportam"
-   },
-   {
-    "alert_id": "ALR-20261017-004972",
-    "rule_id": "UC-EML-001",
-    "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "escalate"
-    ],
-    "justificacion": "La inteligencia del SOC confirma que micr0soft-365-billing.example es un indicador malicioso (phishing, reputación 90, familia 'campaña genérica de facturas'), por lo que no se trata de un subdominio legítimo de CDN/cloud ni de una frase normal de cliente. La regla disparada es un reporte real de ph"
-   },
-   {
-    "alert_id": "ALR-20261018-011879",
-    "rule_id": "UC-VPN-001",
-    "este": [
-     "true_positive",
-     "escalate"
-    ],
-    "referencia": [
-     "benign_true_positive",
-     "escalate"
-    ],
-    "justificacion": "La alerta corresponde a un acceso real y confirmado (evento VPN-0010708 con action 'connect' y asignación de IP interna 10.99.60.12), no a una simple resolución DNS o conexión de tránsito. El acceso se produjo fuera de la ventana contractual y desde un ASN no visto (Limited Network LTD, hosting en L"
-   },
-   {
-    "alert_id": "ALR-20261020-006153",
-    "rule_id": "UC-NET-001",
-    "este": [
-     "benign_true_positive",
-     "close"
-    ],
-    "referencia": [
      "false_positive",
      "close"
     ],
-    "justificacion": "La regla detecta beaconing a un dominio poco frecuente, pero heartbeat.bmc-agent.example no pertenece a un CDN/cloud legítimo ni está en inteligencia maliciosa (sin datos, pero la antigüedad de 2335 días y el patrón de heartbeat regular son típicos de un agente de gestión empresarial). Las 4 peticio"
-   },
-   {
-    "alert_id": "ALR-20261023-011915",
-    "rule_id": "UC-IDP-008",
-    "este": [
+    "referencia": [
      "benign_true_positive",
      "close"
     ],
-    "referencia": [
-     "benign_true_positive",
-     "escalate"
-    ],
-    "justificacion": "La evidencia muestra una adición a Backup Operators realizada por adm.aferrer desde JUMP01, vinculada al ticket CHG-2026-1078. Este cambio está aprobado y tiene cubre_esta_alerta=true, por lo que autoriza explícitamente esta actividad dentro de la ventana y desde la IP de origen correcta. La cuenta "
-   },
-   {
-    "alert_id": "ALR-20261025-011881",
-    "rule_id": "UC-VPN-001",
-    "este": [
-     "true_positive",
-     "escalate"
-    ],
-    "referencia": [
-     "false_positive",
-     "close"
-    ],
-    "justificacion": "La alerta describe un acceso real y confirmado (evento VPN-0010712 con action 'connect'), no una simple resolución DNS ni conexión efímera. El origen es un ASN no visto en el historial del proveedor y la conexión ocurre fuera de la ventana contractual, lo que constituye un indicio concreto de activi"
+    "justificacion": "La detecció 'Virus:DOS/EICAR_Test_File' coincideix exactament amb el resultat del sandbox, que identifica el fitxer com a 'Fichero de prueba EICAR' amb score 0 i sense comportaments sospitosos. El EICAR és un test de seguretat universalment reconegut, no un malware veritable. No hi ha cap canvi apro"
    },
    {
     "alert_id": "ALR-20261026-008345",
     "rule_id": "UC-EDR-002",
     "este": [
-     "false_positive",
-     "close"
-    ],
-    "referencia": [
      "benign_true_positive",
      "close"
     ],
-    "justificacion": "El proceso padre es CcmExec.exe, agente oficial de SCCM, firmando como Microsoft Windows y ejecutándose con integridad System; el comando descodificado es una consulta de inventario de productos de Windows dirigida a un archivo interno del propio directorio CCM, sin exfiltración, persistencia ni acc"
-   },
-   {
-    "alert_id": "ALR-20261026-008404",
-    "rule_id": "UC-EML-001",
-    "este": [
-     "true_positive",
+    "referencia": [
+     "false_positive",
      "close"
     ],
-    "referencia": [
-     "true_positive",
-     "escalate"
-    ],
-    "justificacion": "La inteligencia del SOC marca el dominio micr0soft-365-billing.example como malicioso (phishing, confianza 90), así que no es un patrón normal ni un falso positivo. La regla se disparó porque el usuario reportó el correo, pero el registro del gateway muestra action «delivered» con SPF/DKIM/DMARC fal"
+    "justificacion": "La alerta dispara por el uso de -EncodedCommand, un patrón que también emplean actores de amenaza, pero toda la evidencia apunta a actividad autorizada. El proceso padre es CcmExec.exe (agente oficial de SCCM), el usuario es SYSTEM, el binario está firmado por Microsoft y el comando descodificado re"
    },
    {
     "alert_id": "ALR-20261026-008534",
     "rule_id": "UC-IDP-001",
     "este": [
+     "false_positive",
+     "close"
+    ],
+    "referencia": [
      "true_positive",
      "escalate"
     ],
-    "referencia": [
-     "false_positive",
-     "close"
-    ],
-    "justificacion": "La detección se cumple con dos inicios de sesión exitosos confirmados en registros IDP (SIGN-0061108 y SIGN-0061109) desde ubicaciones geográficas incompatibles en un intervalo de menos de 30 minutos. No es una simple resolución DNS ni conexión: son accesos reales a aplicaciones (Teams y Exchange On"
-   },
-   {
-    "alert_id": "ALR-20261026-008224",
-    "rule_id": "UC-EML-001",
-    "este": [
-     "false_positive",
-     "close"
-    ],
-    "referencia": [
-     "benign_true_positive",
-     "close"
-    ],
-    "justificacion": "La regla se disparó únicamente porque un usuario pulsó 'Reportar phishing', sin que exista actividad maliciosa confirmada. Los controles de autenticación de correo (SPF/DKIM/DMARC) validan correctamente el remitente legítimo de docusign.net, y el motor de seguridad del gateway ya clasificó el mensaj"
+    "justificacion": "La regla «Viaje imposible» dispara per la distància geogràfica entre dos inicios de sessió, però les evidencies mostren que la segona connexió prové d'un mòvil corporatiu conegut i conforme, amb MFA i accés condicional correctes. L'IP 198.18.1.208 pertany a un servei de sortida de Private Relay de M"
    },
    {
     "alert_id": "ALR-20261028-009418",
     "rule_id": "UC-EDR-003",
     "este": [
-     "false_positive",
-     "close"
-    ],
-    "referencia": [
-     "true_positive",
-     "close"
-    ],
-    "justificacion": "La detección 'Virus:DOS/EICAR_Test_File' corresponde al archivo de prueba EICAR, un patrón conocido y legítimo usado para validar la respuesta del antivirus. El sandbox confirma verdict clean con familia 'Fichero de prueba EICAR' y score 0. El EDR bloqueó el archivo antes de que se ejecutara (execut"
-   },
-   {
-    "alert_id": "ALR-20261030-010191",
-    "rule_id": "UC-IDP-001",
-    "este": [
      "benign_true_positive",
      "close"
     ],
@@ -720,33 +485,33 @@
      "false_positive",
      "close"
     ],
-    "justificacion": "La regla 'Viaje imposible' dispara por dos inicios exitosos en ubicaciones incompatibles en <30 min. Sin embargo, la segunda IP (198.19.48.98) es una salida de Private Relay de Apple/Microsoft (servicio legítimo de privacidad móvil), no un acceso real desde Irlanda; la geolocalización es un artefact"
+    "justificacion": "La detecció és correcta: el fitxer és exactament el estàndar EICAR (Virus:DOS/EICAR_Test_File), un test de seguretat d'antivirús sense cap component malicioso real. El sandbox confirma el verdict clean, score 0 i la família 'Fichero de prueba EICAR'. L'acció de l'EDR ha estat quarantena abans de cap"
    },
    {
-    "alert_id": "ALR-20261031-010556",
-    "rule_id": "UC-WEB-001",
+    "alert_id": "ALR-20261030-010191",
+    "rule_id": "UC-IDP-001",
     "este": [
-     "true_positive",
-     "close"
-    ],
-    "referencia": [
      "false_positive",
      "close"
     ],
-    "justificacion": "Se trata de actividad maliciosa real (técnica T1190, Exploit Public-Facing Application) contra un activo de criticidad Crítica (WEB-ECOM01, frontal de la tienda). La IP de origen es un nodo de hosting con perfil de escáner de Internet y el user agent Nuclei confirma intención de exploración. La regl"
-   },
-   {
-    "alert_id": "ALR-20261031-010661",
-    "rule_id": "UC-WEB-001",
-    "este": [
-     "true_positive",
+    "referencia": [
+     "benign_true_positive",
      "close"
     ],
-    "referencia": [
+    "justificacion": "La regla dispara per la incompatibilitat geogràfica entre Barcelona i Dublín en un lapse inferior a 30 minuts, però l'evidència demostra que no és un ús il·lícit d'un compte vàlid. El dispositiu de la segona connexió és un mòvil corporatiu conegut i conforme, amb MFA satisfet i accés condicional cor"
+   },
+   {
+    "alert_id": "ALR-20261101-010863",
+    "rule_id": "UC-CLD-003",
+    "este": [
      "false_positive",
      "close"
     ],
-    "justificacion": "Se trata de actividad maliciosa real: un escáner de internet (IP de hosting, sin ser Tor ni VPN residencial) lanzando firmas de ataque contra una aplicación web crítica. La alerta es low pero la criticidad del activo la eleva a medium calculada. El único cambio aprobado (CHG-2026-1042, pentest exter"
+    "referencia": [
+     "benign_true_positive",
+     "close"
+    ],
+    "justificacion": "La regla detecta un canvi de ACL que expone un bucket, però l'origen és un servei de desplegament corporatiu (svc_ecom_deploy) executant Terraform des d'un runner intern (172.16.10.21), amb userAgent terraform/1.9.5. La política aplicada és s3:GetObject per a imatges de producte, una funció normal d"
    }
   ]
  }

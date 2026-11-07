@@ -16,6 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from core import data, store, ui
+from policy import criticality_ca
 
 SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
 
@@ -25,8 +26,8 @@ if (qa := st.query_params.get("alerta")) and qa in ids:
     st.session_state["cola_open"] = st.session_state["selected_alert"] = qa
     del st.query_params["alerta"]
 if not rows:
-    st.title("Alertas")
-    ui.empty_state("alertas en la bandeja")
+    st.title("Alertes")
+    ui.empty_state("alertes a la safata")
 
 
 def open_alert(alert_id: str) -> None:
@@ -44,47 +45,47 @@ def sort_queue(items: list[dict]) -> list[dict]:
 def render_list() -> bool:
     """Pinta la bandeja. Devuelve True si el usuario acaba de elegir otra alerta."""
     waiting = [r for r in rows if r["decision"] == "escalate" and not r["review"]]
-    st.title("Alertas")
-    st.markdown('<p class="muted">Cada fila es un aviso de una herramienta de seguridad que el sistema ya ha '
-                "revisado. Elige una y debajo verás qué ha pasado, en qué se basa la conclusión y podrás decidir.</p>",
+    st.title("Alertes")
+    st.markdown('<p class="muted">Cada fila és un avís d\'una eina de seguretat que el sistema ja ha '
+                "revisat. Tria'n una i a sota veuràs què ha passat, en què es basa la conclusió i podràs decidir.</p>",
                 unsafe_allow_html=True)
 
     m = st.columns(4)
-    m[0].metric("Esperan a una persona", len(waiting), help="Escaladas a N2 y todavía sin revisar.")
-    m[1].metric("Se cierran solas", sum(r["decision"] == "close" for r in rows),
-                help="El sistema concluye que no hace falta nadie más y lo deja justificado.")
-    m[2].metric("Revisadas por una persona", sum(bool(r["review"]) for r in rows))
-    m[3].metric("Ataques reales", sum(r["verdict"] == "true_positive" for r in rows))
+    m[0].metric("Esperen una persona", len(waiting), help="Escalades a N2 i encara sense revisar.")
+    m[1].metric("Es tanquen soles", sum(r["decision"] == "close" for r in rows),
+                help="El sistema conclou que no cal ningú més i ho deixa justificat.")
+    m[2].metric("Revisades per una persona", sum(bool(r["review"]) for r in rows))
+    m[3].metric("Atacs reals", sum(r["verdict"] == "true_positive" for r in rows))
 
     f1, f2, f3, f4 = st.columns([3, 3, 3, 3], vertical_alignment="bottom")
     dec = f1.selectbox("Mostrar", ["todas", "escalate", "close"], key="cola_dec",
-                       format_func=lambda d: {"todas": "Todas", "escalate": "Necesitan a una persona",
-                                              "close": "Se cierran solas"}[d])
-    ver = f2.multiselect("Conclusión", ui.VERDICT_ORDER, key="cola_ver", placeholder="Todas",
+                       format_func=lambda d: {"todas": "Totes", "escalate": "Necessiten una persona",
+                                              "close": "Es tanquen soles"}[d])
+    ver = f2.multiselect("Conclusió", ui.VERDICT_ORDER, key="cola_ver", placeholder="Totes",
                          format_func=lambda v: ui.VERDICT_LABEL[v])
-    sev = f3.multiselect("Gravedad", list(reversed(list(ui.SEVERITY_LABEL))), key="cola_sev", placeholder="Todas",
+    sev = f3.multiselect("Gravetat", list(reversed(list(ui.SEVERITY_LABEL))), key="cola_sev", placeholder="Totes",
                          format_func=lambda s: ui.SEVERITY_LABEL[s].capitalize())
-    q = f4.text_input("Buscar", placeholder="equipo, usuario, IP, regla…", key="cola_q").lower()
+    q = f4.text_input("Cercar", placeholder="equip, usuari, IP, regla…", key="cola_q").lower()
     filt = sort_queue([r for r in rows if (dec in (None, "todas") or r["decision"] == dec)
                        and (not ver or r["verdict"] in ver) and (not sev or r["severity"] in sev)
                        and (not q or q in str(r["alert"]).lower())])
     st.session_state["cola_filtered"] = [r["alert_id"] for r in filt]
 
     df = pd.DataFrame([{
-        "Gravedad": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
-        "Estado": ("⏳ Espera a una persona" if r["decision"] == "escalate" else "Cerrada por el sistema")
-                  if not r["review"] else f"✓ Revisada por {r['review']['analyst']}",
-        "Qué ha detectado": r["rule_name"],
-        "Conclusión": ui.VERDICT_LABEL[r["verdict"]],
+        "Gravetat": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
+        "Estat": ("⏳ Espera una persona" if r["decision"] == "escalate" else "Tancada pel sistema")
+                 if not r["review"] else f"✓ Revisada per {r['review']['analyst']}",
+        "Què ha detectat": r["rule_name"],
+        "Conclusió": ui.VERDICT_LABEL[r["verdict"]],
         "Origen": r["source_product"],
-        "Cuándo": ui.fmt_time(r["created_at"])[5:16],
-    } for r in filt], columns=["Gravedad", "Estado", "Qué ha detectado", "Conclusión", "Origen", "Cuándo"])
+        "Quan": ui.fmt_time(r["created_at"])[5:16],
+    } for r in filt], columns=["Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan"])
     event = st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
                          height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-row",
                          key="cola_tabla",
-                         column_config={"Gravedad": st.column_config.TextColumn(width="small"),
-                                        "Qué ha detectado": st.column_config.TextColumn(width="large")})
-    st.caption(f"{len(filt)} de {len(rows)} alertas · elige una fila para ver su ficha debajo")
+                         column_config={"Gravetat": st.column_config.TextColumn(width="small"),
+                                        "Què ha detectat": st.column_config.TextColumn(width="large")})
+    st.caption(f"{len(filt)} de {len(rows)} alertes · tria una fila per veure'n la fitxa a sota")
     if event.selection.rows:
         picked = filt[event.selection.rows[0]]["alert_id"]
         if picked != st.session_state.get("cola_last_pick"):
@@ -106,17 +107,17 @@ def render_detail(r: dict, scroll: bool) -> None:
     st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.verdict_badge(r['verdict'])}"
                 f"{ui.example_tag(r, 'verdict')}", unsafe_allow_html=True)
     st.header(r["rule_name"], anchor=False)
-    st.markdown(f'<p class="big"><b>El sistema concluye:</b> {ui.esc(ui.VERDICT_HELP[r["verdict"]])} '
-                f'<b>Propone {ui.esc(ui.DECISION_VERB[r["decision"]])}:</b> {ui.esc(ui.DECISION_HELP[r["decision"]])}</p>',
+    st.markdown(f'<p class="big"><b>El sistema conclou:</b> {ui.esc(ui.VERDICT_HELP[r["verdict"]])} '
+                f'<b>Proposa {ui.esc(ui.DECISION_VERB[r["decision"]])}:</b> {ui.esc(ui.DECISION_HELP[r["decision"]])}</p>',
                 unsafe_allow_html=True)
     mitre = a.get("mitre") or {}
     st.caption(f"{ui.fmt_time(r['created_at'])} · origen {r['source_product']} · alerta {r['alert_id']} · "
-               f"regla {r['rule_id']} · técnica MITRE {mitre.get('technique_id', '—')} {mitre.get('technique', '')}")
+               f"regla {r['rule_id']} · tècnica MITRE {mitre.get('technique_id', '—')} {mitre.get('technique', '')}")
     ui.stepper(r)
 
     if r["injection_flags"]:
-        st.error("**Intento de engañar al sistema.** El contenido de esta alerta incluye instrucciones dirigidas a "
-                 "la clasificación automática. No se han obedecido: la alerta se trata como más sospechosa, no menos.",
+        st.error("**Intent d'enganyar el sistema.** El contingut d'aquesta alerta inclou instruccions adreçades a "
+                 "la classificació automàtica. No s'han obeït: l'alerta es tracta com a més sospitosa, no menys.",
                  icon="⚠️")
         for f in r["injection_flags"]:
             st.code(f["excerpt"], language=None, wrap_lines=True)
@@ -125,23 +126,23 @@ def render_detail(r: dict, scroll: bool) -> None:
 
     # --- la investigación
     with left:
-        ui.eyebrow("La investigación")
+        ui.eyebrow("La investigació")
         with st.container(border=True):
-            ui.step(1, "Qué ha pasado", "Lo que vio la herramienta que lanzó el aviso.")
+            ui.step(1, "Què ha passat", "El que va veure l'eina que va llançar l'avís.")
             st.text(a.get("description", ""))
             ents = ui.entities_table(a)
             if not ents.empty:
                 st.dataframe(ents, hide_index=True, use_container_width=True)
-            with st.expander("Datos originales de la alerta"):
+            with st.expander("Dades originals de l'alerta"):
                 st.json(a.get("evidence") or {})
 
         with st.container(border=True):
             h, b = st.columns([4, 1], vertical_alignment="center")
             with h:
-                ui.step(2, "Qué ha comprobado el sistema",
-                        f"{len(r['queries'])} consultas a las fuentes de la empresa, con lo que encontró en cada una.")
+                ui.step(2, "Què ha comprovat el sistema",
+                        f"{len(r['queries'])} consultes a les fonts de l'empresa, amb el que ha trobat a cadascuna.")
             replay = b.button("▶ Repetir", key="cola_replay", use_container_width=True,
-                              help="Vuelve a mostrar las comprobaciones una a una, en el orden en que se hicieron")
+                              help="Torna a mostrar les comprovacions una a una, en l'ordre en què es van fer")
             box = st.empty()
             if replay:
                 for i in range(1, len(r["queries"]) + 1):
@@ -151,26 +152,26 @@ def render_detail(r: dict, scroll: bool) -> None:
             else:
                 with box.container():
                     ui.query_list(r["queries"])
-            st.caption("🟢 encontrado · 🟡 no hay datos (que no haya datos no significa que sea seguro) · 🔴 error")
+            st.caption("🟢 trobat · 🟡 no hi ha dades (que no n'hi hagi no vol dir que sigui segur) · 🔴 error")
             if r["related_logs"]:
                 n_logs = len(r["related_logs"])
-                with st.expander("Ver el registro de actividad relacionado" if n_logs == 1
-                                 else f"Ver los {n_logs} registros de actividad relacionados"):
+                with st.expander("Veure el registre d'activitat relacionat" if n_logs == 1
+                                 else f"Veure els {n_logs} registres d'activitat relacionats"):
                     st.dataframe(r["related_logs"], hide_index=True, use_container_width=True)
 
     # --- la decisión
     with right:
-        ui.eyebrow("La decisión")
+        ui.eyebrow("La decisió")
         with st.container(border=True):
-            ui.step(3, "Qué concluye y por qué", "La conclusión y las pruebas en las que se apoya.",
+            ui.step(3, "Què conclou i per què", "La conclusió i les proves en què es basa.",
                     ui.example_tag(r, "verdict"))
             c1, c2 = st.columns([2, 3], vertical_alignment="center")
             c1.markdown(ui.verdict_badge(r["verdict"]), unsafe_allow_html=True)
             if r["confidence"] is not None:
-                c2.progress(float(r["confidence"]), text=f"Seguridad de la conclusión: {round(r['confidence'] * 100)} %")
-            st.markdown(f"> {ui.md(r['justification'] or 'El motor todavía no da una justificación.')}")
-            source = {"llm": "Propuesta de la IA, revisada con las reglas de la política del SOC.",
-                      "rules": "Propuesta de las reglas automáticas (la IA no estaba disponible o no respondió bien)"
+                c2.progress(float(r["confidence"]), text=f"Seguretat de la conclusió: {round(r['confidence'] * 100)} %")
+            st.markdown(f"> {ui.md(r['justification'] or 'El sistema no ha donat cap justificació.')}")
+            source = {"llm": "Proposta de la IA, revisada amb les regles de la política del SOC.",
+                      "rules": "Proposta de les regles automàtiques (la IA no estava disponible o no ha respost bé)"
                       + (f" · regla: {r['rule_applied']}." if r.get("rule_applied") else ".")
                       }.get(r.get("decision_source"))
             if source:
@@ -178,88 +179,88 @@ def render_detail(r: dict, scroll: bool) -> None:
             if (so := r.get("second_opinion")) and so.get("verdict"):
                 label = ui.VERDICT_LABEL.get(so["verdict"], so["verdict"])
                 if so["verdict"] == r["verdict"]:
-                    st.caption(f"✔ Las reglas llegan a la misma conclusión ({ui.md(so.get('rule', ''))}).")
+                    st.caption(f"✔ Les regles arriben a la mateixa conclusió ({ui.md(so.get('rule', ''))}).")
                 else:
-                    st.caption(f"↔ Las reglas opinan otra cosa: **{label}** ({ui.md(so.get('rule', ''))}). "
+                    st.caption(f"↔ Les regles opinen una altra cosa: **{label}** ({ui.md(so.get('rule', ''))}). "
                                f"{ui.md(so.get('justification', ''))}")
             for note in r.get("decision_notes") or []:
                 st.caption(f"⚖️ {ui.md(note)}")
             if r["open_questions"]:
-                with st.expander(f"Lo que no ha podido comprobar ({len(r['open_questions'])})",
+                with st.expander(f"El que no ha pogut comprovar ({len(r['open_questions'])})",
                                  expanded=r["verdict"] == "needs_more_info"):
                     for oq in r["open_questions"]:
                         st.markdown(f"- {ui.md(oq)}")
 
         with st.container(border=True):
-            ui.step(4, "Cuánto importa", "Combina lo grave que es la regla con lo importante que es el equipo "
-                    "afectado, como manda la política del SOC.")
+            ui.step(4, "Quant importa", "Combina com de greu és la regla amb com d'important és l'equip "
+                    "afectat, tal com mana la política del SOC.")
             st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.esc(ui.SEVERITY_HELP[r['severity']])}",
                         unsafe_allow_html=True)
-            with st.expander("Ver cómo se ha calculado"):
+            with st.expander("Veure com s'ha calculat"):
                 st.caption(r["severity_rationale"])
                 st.dataframe(ui.severity_matrix(r["rule_severity"], r["asset_criticality"]), use_container_width=True)
-                st.caption(f"Fila: gravedad de la regla ({ui.SEVERITY_LABEL.get(r['rule_severity'], r['rule_severity'])})."
-                           f" Columna: importancia del equipo ({r['asset_criticality'] or 'no está en el inventario'}).")
+                st.caption(f"Fila: gravetat de la regla ({ui.SEVERITY_LABEL.get(r['rule_severity'], r['rule_severity'])})."
+                           f" Columna: importància de l'equip ({criticality_ca(r['asset_criticality']) or 'fora de l’inventari'}).")
 
         with st.container(border=True):
-            ui.step(5, "Qué decides tú", "El sistema solo propone. La decisión, y quién la toma, queda registrada.",
+            ui.step(5, "Què decideixes tu", "El sistema només proposa. La decisió, i qui la pren, queda registrada.",
                     ui.example_tag(r, "decision"))
             rv = r["review"]
             if rv:
                 changed = rv["decision"] != r["decision"]
-                st.success(f"**{rv['analyst']}** decidió **{ui.DECISION_VERB[rv['decision']]}**"
-                           + (" y corrigió al sistema" if changed else ", como proponía el sistema")
+                st.success(f"**{rv['analyst']}** va decidir **{ui.DECISION_VERB[rv['decision']]}**"
+                           + (" i va corregir el sistema" if changed else ", com proposava el sistema")
                            + f" · {rv['at'].replace('T', ' ')[:16]} UTC"
                            + (f"  \nNota: {ui.md(rv['note'])}" if rv["note"] else ""))
                 u1, u2 = st.columns(2)
-                if u1.button("Deshacer la decisión", key="cola_undo", use_container_width=True):
+                if u1.button("Desfer la decisió", key="cola_undo", use_container_width=True):
                     store.delete_review(r["alert_id"])
                     st.rerun()
-                if u2.button("Ver el informe para N2", key="cola_ticket_after", use_container_width=True):
+                if u2.button("Veure l'informe per a N2", key="cola_ticket_after", use_container_width=True):
                     st.switch_page("views/ticket.py")
             else:
-                st.markdown(f"El sistema propone: {ui.decision_badge(r['decision'])} &nbsp; "
+                st.markdown(f"El sistema proposa: {ui.decision_badge(r['decision'])} &nbsp; "
                             f"<span class='muted'>{ui.esc(ui.DECISION_HELP[r['decision']])}</span>",
                             unsafe_allow_html=True)
                 other = "close" if r["decision"] == "escalate" else "escalate"
                 c1, c2 = st.columns(2)
-                analyst = c1.text_input("Tu nombre", key="cola_analyst", placeholder="p. ej. Ana García")
-                note = c2.text_input("Nota (opcional)", key="cola_note", placeholder="por qué decides esto")
+                analyst = c1.text_input("El teu nom", key="cola_analyst", placeholder="p. ex. Anna Garcia")
+                note = c2.text_input("Nota (opcional)", key="cola_note", placeholder="per què ho decideixes")
                 b1, b2 = st.columns(2)
-                if b1.button("✓ De acuerdo", type="primary", help=f"Aceptar la propuesta: {ui.DECISION_VERB[r['decision']]}",
+                if b1.button("✓ D'acord", type="primary", help=f"Acceptar la proposta: {ui.DECISION_VERB[r['decision']]}",
                              disabled=not analyst, key="cola_ok", use_container_width=True):
                     store.save_review(r["alert_id"], r["decision"], analyst, note)
                     st.rerun()
-                if b2.button(f"✗ Mejor {'cerrar' if other == 'close' else 'escalar'}", disabled=not analyst, key="cola_fix",
+                if b2.button(f"✗ Millor {'tancar' if other == 'close' else 'escalar'}", disabled=not analyst, key="cola_fix",
                              use_container_width=True):
                     store.save_review(r["alert_id"], other, analyst, note)
                     st.rerun()
                 if not analyst:
-                    st.caption("Escribe tu nombre para poder decidir.")
+                    st.caption("Escriu el teu nom per poder decidir.")
 
     # --- plan de acción (ancho completo, debajo de las dos columnas)
     with st.container(border=True):
         llm_ok, llm_info = data.llm_status()
-        ui.step("✦", "Borrador del plan de acción",
-                "Un modelo de lenguaje resume la situación y propone qué hacer. Es una ayuda para decidir, "
-                "no una decisión: puede equivocarse y no ejecuta nada.")
+        ui.step("✦", "Esborrany del pla d'acció",
+                "Un model de llenguatge resumeix la situació i proposa què cal fer. És una ajuda per decidir, "
+                "no una decisió: es pot equivocar i no executa res.")
         plans = st.session_state.setdefault("cola_plans", {})
         if r["alert_id"] in plans:
             st.markdown(ui.llm_md(plans[r["alert_id"]]))
-            st.caption(f"Redactado por IA · {llm_info} · los datos de la alerta se le pasan como no fiables, "
-                       "así que no obedece instrucciones escondidas en ellos.")
+            st.caption(f"Redactat per IA · {llm_info} · les dades de l'alerta se li passen com a no fiables, "
+                       "així que no obeeix instruccions amagades.")
         elif llm_ok:
-            if st.button("Redactar plan con la IA", key="cola_plan_btn", icon=":material/auto_awesome:"):
+            if st.button("Redactar el pla amb la IA", key="cola_plan_btn", icon=":material/auto_awesome:"):
                 try:
-                    with st.spinner("Redactando…"):
+                    with st.spinner("Redactant…"):
                         text = st.write_stream(data.action_plan(r))
                     plans[r["alert_id"]] = text if isinstance(text, str) else "".join(map(str, text))
                     st.rerun()
                 except Exception as exc:  # pasarela caída, timeout…
-                    st.error(f"No se ha podido redactar el plan: {exc}")
-            st.caption(f"Tarda unos segundos · {llm_info}.")
+                    st.error(f"No s'ha pogut redactar el pla: {exc}")
+            st.caption(f"Triga uns segons · {llm_info}.")
         else:
-            st.caption(f"No disponible: {llm_info} El resto del triaje funciona igual sin IA.")
+            st.caption(f"No disponible: {llm_info} La resta del triatge funciona igual sense IA.")
 
 
 changed = render_list()

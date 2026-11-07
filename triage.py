@@ -2,7 +2,8 @@ from datetime import datetime, timedelta, timezone
 import re
 
 import soc_api
-from policy import CRITICALITY_ORDER, apply_severity_adjustment, base_severity, cloud_asset, service_assets
+from policy import (CRITICALITY_ORDER, SEVERITY_CA, apply_severity_adjustment, base_severity, cloud_asset,
+                    criticality_ca, service_assets)
 from schemas import Alert, ContextRecord, QueryRecord, TriagePreview
 
 
@@ -123,7 +124,7 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
     assets: list[dict] = []
     asset_origin: dict[str, str] = {}  # hostname -> por qué cuenta como activo afectado
 
-    def add_asset(hostname: str, ip: str | None = None, origin: str = "equipo de la alerta") -> None:
+    def add_asset(hostname: str, ip: str | None = None, origin: str = "equip de l'alerta") -> None:
         if hostname in asset_origin:
             return
         asset = fetch(f"/assets/{hostname}", {}, hostname, lambda h=hostname: soc_api.get_asset(h))
@@ -175,7 +176,7 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
     if not assets:
         for user in users:
             if user.get("workstation"):
-                add_asset(str(user["workstation"]), origin=f"puesto de trabajo de {user.get('upn')}")
+                add_asset(str(user["workstation"]), origin=f"lloc de treball de {user.get('upn')}")
         for hostname, origin in service_assets(alert.model_dump()):
             add_asset(hostname, origin=origin)
         cloud = cloud_asset(alert.model_dump())
@@ -207,7 +208,7 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
             contexts.append(ContextRecord(kind="intel", key=indicator, data=result))
             if result.get("tip") is None and result.get("geo") is None:
                 open_questions.append(
-                    f"No hay resultado de inteligencia para {indicator}; esto no confirma que sea benigno."
+                    f"No hi ha resultat d'intel·ligència per a {indicator}; això no confirma que sigui benigne."
                 )
 
     evidence_hashes = []
@@ -249,7 +250,7 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
                     related_logs.append({"_source": log_source, **event})
     elif alert.related_events:
         open_questions.append(
-            f"No hay correspondencia de fuente de logs configurada para {alert.source_product}."
+            f"No hi ha cap font de registres configurada per a {alert.source_product}."
         )
 
     if assets:
@@ -258,27 +259,29 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
             key=lambda asset: _criticality_rank(str(asset.get("criticality", ""))),
         )
         criticality = str(most_critical_asset.get("criticality", ""))
-        hostname = str(most_critical_asset.get("hostname", "desconocido"))
+        hostname = str(most_critical_asset.get("hostname", "desconegut"))
         if _criticality_rank(criticality) >= 0:
             severity = base_severity(alert.severity, criticality)
             origin = asset_origin.get(hostname)
             rationale = (
-                f"Matriz SOC: regla {alert.severity.lower()} × criticidad {criticality} del activo {hostname}"
-                + (f" ({origin})" if origin and origin != "equipo de la alerta" else "")
-                + f" = {severity}."
+                f"Matriu del SOC: regla {SEVERITY_CA.get(alert.severity.lower(), alert.severity)} × criticitat "
+                f"{criticality_ca(criticality)} de l'actiu {hostname}"
+                + (f" ({origin})" if origin and origin != "equip de l'alerta" else "")
+                + f" = {SEVERITY_CA[severity]}."
             )
         else:
             severity = base_severity(alert.severity, "Media")
-            rationale = (f"Matriz SOC: la CMDB no da una criticidad reconocida para {hostname}; se asume Media: "
-                         f"regla {alert.severity.lower()} × Media = {severity}.")
-            open_questions.append("Confirmar la criticidad del activo antes de cerrar la severidad final.")
+            rationale = (f"Matriu del SOC: la CMDB no dona una criticitat reconeguda per a {hostname}; se suposa "
+                         f"Mitjana: regla {SEVERITY_CA.get(alert.severity.lower(), alert.severity)} × Mitjana = "
+                         f"{SEVERITY_CA[severity]}.")
+            open_questions.append("Confirmar la criticitat de l'actiu abans de tancar la gravetat final.")
     else:
         severity = base_severity(alert.severity, "Media")
         rationale = (
-            f"Matriz SOC: no se identificó ningún activo afectado en la CMDB; se asume criticidad Media: "
-            f"regla {alert.severity.lower()} × Media = {severity}."
+            f"Matriu del SOC: no s'ha identificat cap actiu afectat a la CMDB; se suposa criticitat Mitjana: "
+            f"regla {SEVERITY_CA.get(alert.severity.lower(), alert.severity)} × Mitjana = {SEVERITY_CA[severity]}."
         )
-        open_questions.append("Determinar la criticidad del activo o identidad afectada.")
+        open_questions.append("Determinar la criticitat de l'actiu o de la identitat afectada.")
 
     matrix_severity, matrix_rationale = severity, rationale
     privileged_identity = any(
@@ -286,10 +289,10 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
     )
     if privileged_identity:
         severity = apply_severity_adjustment(severity, 1)
-        rationale += " Ajuste +1 por identidad VIP o privilegiada (política SOC)."
+        rationale += " Ajust +1 per identitat VIP o privilegiada (política del SOC)."
 
     if not related_logs:
-        open_questions.append("Corroborar si hubo actividad posterior o impacto efectivo.")
+        open_questions.append("Corroborar si hi va haver activitat posterior o impacte efectiu.")
 
     preview = TriagePreview(
         alert=alert,

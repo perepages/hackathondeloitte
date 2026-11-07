@@ -134,5 +134,11 @@ La API de Deloitte se arranca desde `../DTT-UAB-The-Hack/06_herramientas` con
   obligatorias; 0 incoherencias (escalada informativa o ataque grave cerrado). 64 tests en verde.
 - No se ha juntado la rama `pozobranch` con git: su `app.py` es la app antigua y sus campos no encajaban con el front.
 
+**Interfaz en catalán (7 nov, noche).** Todo lo que ve el jurado está en catalán: pantallas, explicaciones de
+gravedad, notas de la política, reglas y textos de la IA (se le pide escribir en catalán y no mencionar campos
+internos). Los nombres de reglas y descripciones de alerta siguen en castellano porque son datos de Deloitte.
+Fuera del menú de la demo: «Prototipo del back» e «Incidents» (solo había un incidente de ejemplo); con
+`SOC_DEV=1` vuelven a salir. Nota: en directo, la IA alguna vez puede responder en castellano.
+
 **Siguiente: agrupar alertas en incidentes (`incident_id`, política §6).** Ejemplo claro en la muestra: los tres
 accesos VPN de Logisoft (11, 18 y 25 de octubre, domingos de madrugada desde el mismo ASN) son un mismo incidente.

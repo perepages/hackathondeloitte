@@ -1,4 +1,4 @@
-"""Contención con aprobación humana (nivel 4).
+"""Contención con aprobación humana (nivel 4). Textos en catalán.
 
 Dueño: PERSONA A. Flujo por acción: propuesta -> aprobada (nombre + motivo) -> ejecutada.
 Reglas de la política §4 visibles en pantalla:
@@ -15,18 +15,19 @@ import streamlit as st
 from core import data, ui
 
 DUAL_USE = ("mega.nz", "anydesk", "teamviewer")
+STATUS_LABEL = {"propuesta": "🟡 Pendent", "aprobada": "🔵 Aprovada", "ejecutada": "🟢 Feta"}
 
-st.title("Acciones de respuesta")
-st.markdown('<p class="muted">Cuando una alerta es un ataque real, el sistema propone cómo pararlo: aislar un equipo, '
-            "bloquear una IP, borrar un correo… <b>Nada se ejecuta sin que una persona lo apruebe</b>, salvo las acciones "
-            "que la política del SOC permite al nivel 1. "
-            + ("En esta demo la ejecución es simulada." if data.MODE == "fixture" else "Se ejecuta contra la API del SOC.")
+st.title("Accions de resposta")
+st.markdown('<p class="muted">Quan una alerta és un atac real, el sistema proposa com aturar-lo: aïllar un equip, '
+            "bloquejar una IP, esborrar un correu… <b>No s'executa res sense que una persona ho aprovi</b>, excepte "
+            "les accions que la política del SOC permet al nivell 1. "
+            + ("En aquesta demo l'execució és simulada." if data.MODE == "fixture" else "S'executa contra l'API del SOC.")
             + "</p>", unsafe_allow_html=True)
 
 rows = [r for r in data.load_results()
         if r["decision"] == "escalate" and any(a["action"] not in ("close", "escalate") for a in r["recommended_actions"])]
 if not rows:
-    st.info("Ninguna alerta escalada tiene acciones de respuesta propuestas.")
+    st.info("Cap alerta escalada té accions de resposta proposades.")
     st.stop()
 
 state = st.session_state.setdefault("contencion_estado", {})  # clave -> {estado, token, aprobador, motivo}
@@ -42,14 +43,14 @@ def pending_line(view: dict) -> str:
     acts = actions_of(view)
     done = sum(state.get(f"{view['alert_id']}|{a['action']}|{a['target']}", {}).get("estado") == "ejecutada"
                for a in acts)
-    return (("1 acción propuesta" if len(acts) == 1 else f"{len(acts)} acciones propuestas")
-            + (f" · {done} hecha{'s' if done != 1 else ''}" if done else " · ninguna hecha"))
+    return (("1 acció proposada" if len(acts) == 1 else f"{len(acts)} accions proposades")
+            + (f" · {done} feta{'s' if done != 1 else ''}" if done else " · cap de feta"))
 
 
 cur = st.session_state.get("contencion_sel") or st.session_state.get("selected_alert")
 cur = cur if cur in ids else None
-ui.eyebrow(f"Elige una alerta · {len(rows)} escaladas con acciones propuestas")
-picked = ui.alert_cards(rows, cur or ids[0], key="contencion_pick", extra=pending_line, button_label="Ver acciones")
+ui.eyebrow(f"Tria una alerta · {len(rows)} escalades amb accions proposades")
+picked = ui.alert_cards(rows, cur or ids[0], key="contencion_pick", extra=pending_line, button_label="Veure les accions")
 if picked != (cur or ids[0]):
     st.session_state["contencion_sel"] = st.session_state["selected_alert"] = picked
     st.rerun()
@@ -58,19 +59,19 @@ r = data.get_result(alert_id)
 ot = ui.is_ot(r)
 
 st.divider()
-ui.eyebrow("Acciones propuestas para")
+ui.eyebrow("Accions proposades per a")
 st.subheader(r["rule_name"], anchor=False)
 st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.verdict_badge(r['verdict'])} &nbsp; "
             f"<span class='muted'>{ui.esc(ui.main_entity(r))}</span>", unsafe_allow_html=True)
 st.markdown(f"> {ui.md(r['justification'])}")
 if ot:
-    st.error("El equipo está en la red de logística (OT). La política no permite al SOC tocarla: hay que avisar a Operaciones.")
+    st.error("L'equip és a la xarxa de logística (OT). La política no permet al SOC tocar-la: cal avisar Operacions.")
 
 
 def record(action: dict, result: str, who: str):
     log.append({"Hora": dt.datetime.now().strftime("%H:%M:%S"), "Alerta": alert_id,
-                "Acción": ui.ACTION_LABEL.get(action["action"], action["action"]), "Objetivo": action["target"],
-                "Aprobó": who, "Resultado": result})
+                "Acció": ui.ACTION_LABEL.get(action["action"], action["action"]), "Objectiu": action["target"],
+                "Ho va aprovar": who, "Resultat": result})
 
 
 for i, act in enumerate(actions_of(r)):
@@ -81,35 +82,35 @@ for i, act in enumerate(actions_of(r)):
     with st.container(border=True):
         h1, h2 = st.columns([4, 1])
         h1.markdown(f"**{ui.ACTION_LABEL.get(act['action'], act['action'])}** · sobre `{act['target']}`")
-        h2.markdown({"propuesta": "🟡 Pendiente", "aprobada": "🔵 Aprobada", "ejecutada": "🟢 Hecha"}[st_["estado"]])
-        st.caption(act.get("justification", "") + (" · Necesita la aprobación de un analista senior (N2)." if needs else
-                                                   " · La política permite hacerla sin aprobación."))
+        h2.markdown(STATUS_LABEL[st_["estado"]])
+        st.caption(act.get("justification", "") + (" · Necessita l'aprovació d'un analista sènior (N2)." if needs else
+                                                   " · La política permet fer-la sense aprovació."))
         if dual:
-            st.caption("Es un servicio legítimo que también usan atacantes: no se bloquea para toda la empresa sin N2.")
+            st.caption("És un servei legítim que també fan servir els atacants: no es bloqueja per a tota l'empresa sense N2.")
         if ot:
-            st.button("No permitido: red OT", disabled=True, key=f"contencion_ot_{i}")
+            st.button("No permès: xarxa OT", disabled=True, key=f"contencion_ot_{i}")
         elif st_["estado"] == "ejecutada":
-            st.success(f"Hecha · aprobó {st_.get('aprobador') or 'no hacía falta aprobación'}")
+            st.success(f"Feta · ho va aprovar {st_.get('aprobador') or 'ningú (no calia aprovació)'}")
         elif needs and st_["estado"] == "propuesta":
             c1, c2, c3 = st.columns([2, 3, 2])
-            who = c1.text_input("Quién aprueba (N2)", key=f"contencion_who_{i}")
-            why = c2.text_input("Por qué", key=f"contencion_why_{i}")
-            if c3.button("Aprobar", key=f"contencion_ok_{i}", disabled=not (who and why), use_container_width=True):
+            who = c1.text_input("Qui ho aprova (N2)", key=f"contencion_who_{i}")
+            why = c2.text_input("Per què", key=f"contencion_why_{i}")
+            if c3.button("Aprovar", key=f"contencion_ok_{i}", disabled=not (who and why), use_container_width=True):
                 token = data.approve(act["action"], act["target"], who, why)
                 state[key] = {"estado": "aprobada", "token": token, "aprobador": who, "motivo": why}
                 st.rerun()
         else:
-            if st.button("Ejecutar", type="primary", key=f"contencion_run_{i}"):
+            if st.button("Executar", type="primary", key=f"contencion_run_{i}"):
                 try:
                     res = data.contain(act["action"], act["target"], act.get("justification", ""), st_.get("token", ""))
                     state[key] = {**st_, "estado": "ejecutada"}
                     record(act, str(res.get("result", "ok")), st_.get("aprobador", "—"))
                 except Exception as exc:  # p. ej. 403 de la API por falta de aprobación
-                    st.error(f"La API rechazó la acción: {exc}")
+                    st.error(f"L'API ha rebutjat l'acció: {exc}")
                 st.rerun()
 
-st.subheader("Registro: qué se ha hecho y quién lo aprobó", anchor=False)
+st.subheader("Registre: què s'ha fet i qui ho va aprovar", anchor=False)
 if log:
     st.dataframe(pd.DataFrame(log), hide_index=True, use_container_width=True)
 else:
-    st.caption("Todavía no se ha ejecutado ninguna acción en esta sesión.")
+    st.caption("Encara no s'ha executat cap acció en aquesta sessió.")

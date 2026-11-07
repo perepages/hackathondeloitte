@@ -71,4 +71,4 @@ def test_sin_equipo_en_la_alerta_usa_el_puesto_del_usuario(monkeypatch):
     result = triage.analyze_alert("ALR-2", decide=False)
 
     assert result.severity == "medium"  # low x Crítica
-    assert "WS-CEO" in result.severity_rationale and "puesto de trabajo" in result.severity_rationale
+    assert "WS-CEO" in result.severity_rationale and "lloc de treball" in result.severity_rationale

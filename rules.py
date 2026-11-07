@@ -95,8 +95,8 @@ def tip_matches(preview: dict, reputations=BAD_REPUTATION) -> list[tuple[str, di
 
 
 def _tip_text(matches: list[tuple[str, dict]]) -> str:
-    return "; ".join(f"{k} = {t.get('reputation')} ({t.get('tags') or t.get('malware_family') or 's/etiqueta'}, "
-                     f"confianza {t.get('confidence')})" for k, t in matches)
+    return "; ".join(f"{k} = {t.get('reputation')} ({t.get('tags') or t.get('malware_family') or 'sense etiqueta'}, "
+                     f"confiança {t.get('confidence')})" for k, t in matches)
 
 
 def _ips_in(text: str) -> list:
@@ -187,39 +187,39 @@ def runbooks(preview: dict) -> dict | None:
     # --- actividad autorizada
     subject, sender = str(ev.get("subject", "")), str(ev.get("sender", "")).lower()
     if "simulacro" in subject.lower() and sender.endswith("@tarvia.example"):
-        return _proposal("benign_true_positive", 0.95, f"Correo del simulacro interno de phishing («{subject}», "
-                         f"remitente {sender}): el usuario lo reportó bien (RB-01).", "RB-01 simulacro")
+        return _proposal("benign_true_positive", 0.95, f"Correu del simulacre intern de phishing («{subject}», "
+                         f"remitent {sender}): l'usuari el va reportar bé (RB-01).", "RB-01 simulacre")
 
     if change := authorized_change(preview):
-        return _proposal("benign_true_positive", 0.9, f"La alerta cae dentro del cambio aprobado {change.get('id')} "
-                         f"«{change.get('titulo')}» ({change.get('inicio')} – {change.get('fin')} hora de España; "
+        return _proposal("benign_true_positive", 0.9, f"L'alerta cau dins del canvi aprovat {change.get('id')} "
+                         f"«{change.get('titulo')}» ({change.get('inicio')} – {change.get('fin')} hora d'Espanya; "
                          f"{change.get('detalle')}).",
-                         "Calendario de cambios")
+                         "Calendari de canvis")
 
     if "ccmexec" in str(ev.get("parent", "")).lower() and str(ev.get("user", "")).upper() == "SYSTEM":
-        return _proposal("benign_true_positive", 0.9, "PowerShell codificado lanzado por el agente SCCM (CcmExec.exe) "
-                         "como SYSTEM: tarea de inventario de software (RB-02).", "RB-02 SCCM")
+        return _proposal("benign_true_positive", 0.9, "PowerShell codificat llançat per l'agent SCCM (CcmExec.exe) "
+                         "com a SYSTEM: tasca d'inventari de programari (RB-02).", "RB-02 SCCM")
 
     if "eicar" in str(ev.get("detection_name", "")).lower():
-        return _proposal("benign_true_positive", 0.9, f"Fichero de prueba de antivirus EICAR "
-                         f"({ev.get('detection_name')}), {ev.get('action', 'detectado')}: no es malware real (RB-02).",
+        return _proposal("benign_true_positive", 0.9, f"Fitxer de prova d'antivirus EICAR "
+                         f"({ev.get('detection_name')}), {ev.get('action', 'detectat')}: no és programari maliciós real (RB-02).",
                          "RB-02 EICAR")
 
     if rule == "UC-IDP-001" and (travel := _travel_matches(alert, users)):
-        return _proposal("benign_true_positive", 0.85, f"Inicio de sesión explicado por un viaje comunicado a RRHH "
-                         f"({travel}) (RB-03).", "RB-03 viaje")
+        return _proposal("benign_true_positive", 0.85, f"Inici de sessió explicat per un viatge comunicat a RRHH "
+                         f"({travel}) (RB-03).", "RB-03 viatge")
 
     if rule.startswith("UC-DLP"):
         if "gestoria-pons.example" in str(ev).lower():
-            return _proposal("benign_true_positive", 0.9, "Envío de nóminas a la gestoría externa autorizada "
-                             "(gestoria-pons.example), flujo de negocio aprobado (RB-04).", "RB-04 flujo aprobado")
+            return _proposal("benign_true_positive", 0.9, "Enviament de nòmines a la gestoria externa autoritzada "
+                             "(gestoria-pons.example), flux de negoci aprovat (RB-04).", "RB-04 flux aprovat")
         if str(ev.get("personal_data_matches")) == "0":
-            return _proposal("benign_true_positive", 0.7, "Subida a un servicio externo sin datos personales "
-                             "(0 coincidencias en DLP): sin impacto RGPD (RB-04).", "RB-04 sin datos personales")
+            return _proposal("benign_true_positive", 0.7, "Pujada a un servei extern sense dades personals "
+                             "(0 coincidències al DLP): sense impacte RGPD (RB-04).", "RB-04 sense dades personals")
 
     tree = str(ev.get("process_tree", ""))
     if rule == "UC-EDR-001" and ev.get("signer") and tree.lower().endswith("saplogon.exe"):
-        return _proposal("benign_true_positive", 0.85, f"{tree} firmado por {ev['signer']}: integración Excel-SAP "
+        return _proposal("benign_true_positive", 0.85, f"{tree} signat per {ev['signer']}: integració Excel-SAP "
                          "habitual.", "RB-02 Excel-SAP")
 
     # --- ataque real
@@ -228,40 +228,40 @@ def runbooks(preview: dict) -> dict | None:
         if str(sbx.get("verdict", "")).lower() in ("malicious", "malware") or (isinstance(score, (int, float)) and score >= 70):
             family = sbx.get("family") or sbx.get("malware_family") or "malware"
             executed = str(ev.get("executed")).lower() == "true"
-            acts = [{"action": "block_ioc", "target": sbx.get("sha256", ""), "justification": f"Hash malicioso ({family})."}]
+            acts = [{"action": "block_ioc", "target": sbx.get("sha256", ""), "justification": f"Hash maliciós ({family})."}]
             if host:
-                acts.append({"action": "isolate_host", "target": host, "justification": "Malware verificado en sandbox."})
-            return _proposal("true_positive", 0.9, f"La sandbox confirma malware ({family}, puntuación {score})"
-                             + (" y llegó a ejecutarse." if executed else ".") + " (RB-02)", "RB-02 sandbox",
+                acts.append({"action": "isolate_host", "target": host, "justification": "Programari maliciós verificat a la sandbox."})
+            return _proposal("true_positive", 0.9, f"La sandbox confirma programari maliciós ({family}, puntuació {score})"
+                             + (" i es va arribar a executar." if executed else ".") + " (RB-02)", "RB-02 sandbox",
                              adjustment=1 if executed else 0, decision="escalate" if executed else None, actions=acts)
 
     if rule == "UC-EML-003":
-        acts = [{"action": "block_ioc", "target": d, "justification": "Dominio de phishing."}
+        acts = [{"action": "block_ioc", "target": d, "justification": "Domini de phishing."}
                 for d in (ent.get("domains") or [])[:2]]
         if upn:
-            acts += [{"action": "revoke_sessions", "target": upn, "justification": "Posible robo de credenciales."},
-                     {"action": "reset_password", "target": upn, "justification": "Forzar cambio de contraseña."}]
-        return _proposal("true_positive", 0.85, "El empleado hizo clic en un enlace que el filtro de correo "
-                         "reclasificó como phishing: posible robo de credenciales (RB-01).", "RB-01 clic en phishing",
+            acts += [{"action": "revoke_sessions", "target": upn, "justification": "Possible robatori de credencials."},
+                     {"action": "reset_password", "target": upn, "justification": "Forçar el canvi de contrasenya."}]
+        return _proposal("true_positive", 0.85, "L'empleat va fer clic en un enllaç que el filtre de correu "
+                         "va reclassificar com a phishing: possible robatori de credencials (RB-01).", "RB-01 clic en phishing",
                          adjustment=1, decision="escalate", actions=acts)
 
     if rule == "UC-EDR-001" and ev.get("persistence") and not ev.get("signer"):
-        acts = [{"action": "isolate_host", "target": host, "justification": "Ejecución con persistencia."}] if host else []
-        return _proposal("true_positive", 0.9, f"Cadena {tree} sin firma con persistencia ({ev['persistence']}) y el "
-                         f"EDR solo lo detectó ({ev.get('edr_action', '')}): ejecución confirmada (RB-02).",
-                         "RB-02 persistencia", adjustment=1, decision="escalate", actions=acts)
+        acts = [{"action": "isolate_host", "target": host, "justification": "Execució amb persistència."}] if host else []
+        return _proposal("true_positive", 0.9, f"Cadena {tree} sense signatura amb persistència ({ev['persistence']}) i "
+                         f"l'EDR només la va detectar ({ev.get('edr_action', '')}): execució confirmada (RB-02).",
+                         "RB-02 persistència", adjustment=1, decision="escalate", actions=acts)
 
     if rule == "UC-IDP-003" and re.search(r"approved|aprobad", str(ev.get("final_result", "")), re.I) and upn:
-        return _proposal("true_positive", 0.9, "Fatiga MFA: tras decenas de notificaciones el usuario aprobó una "
-                         "(acceso confirmado) (RB-03).", "RB-03 fatiga MFA", adjustment=1, decision="escalate",
-                         actions=[{"action": "revoke_sessions", "target": upn, "justification": "MFA eludido."},
-                                  {"action": "reset_password", "target": upn, "justification": "Contraseña comprometida."}])
+        return _proposal("true_positive", 0.9, "Fatiga MFA: després de desenes de notificacions l'usuari en va aprovar una "
+                         "(accés confirmat) (RB-03).", "RB-03 fatiga MFA", adjustment=1, decision="escalate",
+                         actions=[{"action": "revoke_sessions", "target": upn, "justification": "MFA eludit."},
+                                  {"action": "reset_password", "target": upn, "justification": "Contrasenya compromesa."}])
 
     if rule == "UC-IDP-002" and isinstance(ev.get("successes"), (int, float)) and ev["successes"] > 0:
         acts = [{"action": "block_ioc", "target": ip, "justification": "Origen del password spraying."}
                 for ip in (ent.get("ips") or [])[:6]]
-        return _proposal("true_positive", 0.9, f"Password spraying con {ev['successes']} acceso(s) válido(s) "
-                         f"({ev.get('failed_attempts')} intentos contra {ev.get('distinct_accounts')} cuentas) (RB-03).",
+        return _proposal("true_positive", 0.9, f"Password spraying amb {ev['successes']} accés(sos) vàlid(s) "
+                         f"({ev.get('failed_attempts')} intents contra {ev.get('distinct_accounts')} comptes) (RB-03).",
                          "RB-03 password spraying", adjustment=1, decision="escalate", actions=acts)
 
     if rule == "UC-VPN-001" and str(ev.get("account_type", "")).lower() == "external":
@@ -274,42 +274,42 @@ def runbooks(preview: dict) -> dict | None:
         connected = bool(re.search(r"aprobad|approved|connect", str(ev), re.I))
         if new_origin and off_hours and connected:
             ips = (ent.get("ips") or [])[:1]
-            return _proposal("true_positive", 0.8, f"Cuenta de proveedor conectada por VPN fuera de su ventana "
-                             f"contractual ({ev.get('contract_window')}; conexión: {local}) desde {src}, que no es su "
-                             f"origen habitual ({usual}), con MFA aprobado y sin cambio que lo cubra: sesión desde "
-                             "infraestructura ajena, posible robo de credenciales del proveedor (RB-03).",
-                             "RB-03 VPN de proveedor", adjustment=1, decision="escalate",
-                             actions=([{"action": "revoke_sessions", "target": upn, "justification": "Sesión sospechosa."},
-                                       {"action": "reset_password", "target": upn, "justification": "Credenciales del "
-                                        "proveedor posiblemente robadas."}] if upn else [])
+            return _proposal("true_positive", 0.8, f"Compte de proveïdor connectat per VPN fora de la seva finestra "
+                             f"contractual ({ev.get('contract_window')}; connexió: {local}) des de {src}, que no és el seu "
+                             f"origen habitual ({usual}), amb MFA aprovat i sense cap canvi que ho cobreixi: sessió des "
+                             "d'infraestructura aliena, possible robatori de credencials del proveïdor (RB-03).",
+                             "RB-03 VPN de proveïdor", adjustment=1, decision="escalate",
+                             actions=([{"action": "revoke_sessions", "target": upn, "justification": "Sessió sospitosa."},
+                                       {"action": "reset_password", "target": upn, "justification": "Credencials del "
+                                        "proveïdor possiblement robades."}] if upn else [])
                              + [{"action": "block_ioc", "target": ip, "justification": "Origen no habitual."} for ip in ips])
 
     if rule == "UC-WEB-003":
-        acts = [{"action": "block_ioc", "target": ip, "justification": "Origen del robo de cuenta."}
+        acts = [{"action": "block_ioc", "target": ip, "justification": "Origen del robatori de compte."}
                 for ip in (ent.get("ips") or [])[:2]]
-        return _proposal("true_positive", 0.9, f"Robo de cuenta de cliente con fraude: {ev.get('sequence', 'secuencia ATO')} "
-                         f"en {ev.get('minutes_between', '?')} min (RB-05). Fraude económico: escalado obligatorio.",
+        return _proposal("true_positive", 0.9, f"Robatori de compte de client amb frau: {ev.get('sequence', 'seqüència ATO')} "
+                         f"en {ev.get('minutes_between', '?')} min (RB-05). Frau econòmic: escalat obligatori.",
                          "RB-05 ATO", decision="escalate", actions=acts)
 
     zones = [str(a.get("zone", "")) for a in _ctx(preview, "asset")]
     if rule.startswith("UC-OT") or any(z.upper().endswith("-OT") for z in zones):
         if host and host.upper() not in ("ENG-WS01", "WMS01"):
-            return _proposal("true_positive", 0.85, f"Conexión a la red OT desde {host}; solo ENG-WS01 y WMS01 están "
-                             "autorizados (RB-08). No se actúa sobre OT: se escala a Operaciones.", "RB-08 OT",
+            return _proposal("true_positive", 0.85, f"Connexió a la xarxa OT des de {host}; només ENG-WS01 i WMS01 hi estan "
+                             "autoritzats (RB-08). No s'actua sobre OT: s'escala a Operacions.", "RB-08 OT",
                              decision="escalate", actions=[])
 
     if rule in ("UC-NET-001", "UC-NET-005"):
         domain = str(ev.get("domain") or ev.get("parent_domain") or next(iter(ent.get("domains") or []), ""))
         good = tip_matches(preview, KNOWN_GOOD)
         if good and not tip_matches(preview):
-            return _proposal("false_positive", 0.85, f"Tráfico periódico a un servicio legítimo según el TIP "
-                             f"({_tip_text(good)}) (RB-09).", "RB-09 servicio legítimo")
+            return _proposal("false_positive", 0.85, f"Trànsit periòdic cap a un servei legítim segons el TIP "
+                             f"({_tip_text(good)}) (RB-09).", "RB-09 servei legítim")
         age = ev.get("domain_age_days")
         if rule == "UC-NET-001" and isinstance(age, (int, float)) and age < 30 and not _domain_ok(domain):
-            return _proposal("true_positive", 0.85, f"Beaconing con baja varianza a {domain}, dominio de {age} días "
-                             "sin historial: posible C2 (RB-09).", "RB-09 dominio joven", decision="escalate",
-                             actions=[{"action": "block_ioc", "target": domain, "justification": "Posible C2."}]
-                             + ([{"action": "isolate_host", "target": host, "justification": "Posible implante."}]
+            return _proposal("true_positive", 0.85, f"Beaconing amb poca variància cap a {domain}, domini de {age} dies "
+                             "sense historial: possible C2 (RB-09).", "RB-09 domini jove", decision="escalate",
+                             actions=[{"action": "block_ioc", "target": domain, "justification": "Possible C2."}]
+                             + ([{"action": "isolate_host", "target": host, "justification": "Possible implant."}]
                                 if host else []))
     return None
 
@@ -329,14 +329,14 @@ def use_case_rules(preview: dict) -> dict:
     if alert.get("rule_id") == "UC-AI-001":  # primero, indicios de manipulación del asistente
         excerpt = str((alert.get("evidence") or {}).get("prompt_excerpt", ""))
         if INJECTION_HINTS.search(excerpt):
-            return _proposal("true_positive", 0.75, f"Intento de manipular al asistente Vela: «{excerpt[:100]}» (RB-07).",
-                             "RB-07 manipulación")
+            return _proposal("true_positive", 0.75, f"Intent de manipular l'assistent Vela: «{excerpt[:100]}» (RB-07).",
+                             "RB-07 manipulació")
     try:
         verdict, confidence, why, bump = rule(alert, ctx, bad)
     except Exception as exc:  # una regla que no sabe leer esta alerta no debe tumbar el triaje
         verdict, confidence, why, bump = reglas.r_default(alert, ctx, bad)
-        why += f" (La regla específica falló: {exc}.)"
-    return _proposal(verdict, confidence, why, f"{alert.get('rule_id')} (reglas por caso de uso)", adjustment=bump)
+        why += f" (La regla específica ha fallat: {exc}.)"
+    return _proposal(verdict, confidence, why, f"{alert.get('rule_id')} (regles per cas d'ús)", adjustment=bump)
 
 
 def evaluate(preview: dict) -> dict:
@@ -344,8 +344,8 @@ def evaluate(preview: dict) -> dict:
     alert = preview["alert"]
     proposal = runbooks(preview) or use_case_rules(preview)
     if proposal["verdict"] == "needs_more_info" and (bad := tip_matches(preview)):
-        proposal = _proposal("true_positive", 0.7, f"Indicadores con mala reputación en el TIP: {_tip_text(bad)}.",
-                             "TIP", actions=[{"action": "block_ioc", "target": k, "justification": "Mala reputación en el TIP."}
+        proposal = _proposal("true_positive", 0.7, f"Indicadors amb mala reputació al TIP: {_tip_text(bad)}.",
+                             "TIP", actions=[{"action": "block_ioc", "target": k, "justification": "Mala reputació al TIP."}
                                              for k, _ in bad])
     if not proposal["title"]:
         proposal["title"] = f"{alert.get('rule_name')}: {proposal['justification'].split('.')[0][:90]}"

@@ -1,4 +1,4 @@
-"""Punto de entrada del front (dueño: persona A).
+"""Punto de entrada del front (dueño: persona A). Interfaz en catalán.
 
     .venv\\Scripts\\python.exe -m streamlit run app.py
 
@@ -7,6 +7,8 @@ Datos: por defecto lee data/fixture.json (no hace falta la API). Para el back re
 
 Páginas y dueños (los nombres de menú son para el público; el dueño solo se ve aquí):
   A: inicio, cola, ticket, contencion   ·   B: directo, panel, incidentes   ·   back: mvp_back
+Fuera del menú de la demo (siguen en views/): mvp_back (primera app del back) e incidentes (hasta que el back
+agrupe alertas de verdad; hoy solo hay un incidente de ejemplo). SOC_DEV=1 los vuelve a enseñar.
 """
 import os
 
@@ -14,37 +16,36 @@ import streamlit as st
 
 from core import data, ui
 
-st.set_page_config(page_title="Tarvia · Triaje de alertas", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Tarvia · Triatge d'alertes", page_icon="🛡️", layout="wide")
 ui.inject_css()
 
+DEV = os.getenv("SOC_DEV", "0") == "1"
 pages = {
     "": [
-        st.Page("views/inicio.py", title="Inicio", icon=":material/home:", default=True),
+        st.Page("views/inicio.py", title="Inici", icon=":material/home:", default=True),
     ],
-    "Revisar alertas": [
-        st.Page("views/cola.py", title="Alertas", icon=":material/inbox:"),
-        st.Page("views/ticket.py", title="Informe para N2", icon=":material/description:"),
-        st.Page("views/contencion.py", title="Acciones de respuesta", icon=":material/shield:"),
+    "Revisar alertes": [
+        st.Page("views/cola.py", title="Alertes", icon=":material/inbox:"),
+        st.Page("views/ticket.py", title="Informe per a N2", icon=":material/description:"),
+        st.Page("views/contencion.py", title="Accions de resposta", icon=":material/shield:"),
     ],
-    "Visión de conjunto": [
-        st.Page("views/directo.py", title="Triaje en directo", icon=":material/bolt:"),
-        st.Page("views/panel.py", title="Resumen", icon=":material/insights:"),
-        st.Page("views/incidentes.py", title="Incidentes", icon=":material/hub:"),
-    ],
-    "Equipo técnico": [
-        st.Page("views/mvp_back.py", title="Prototipo del back", icon=":material/build:"),
+    "Visió de conjunt": [
+        st.Page("views/directo.py", title="Triatge en directe", icon=":material/bolt:"),
+        st.Page("views/panel.py", title="Resum", icon=":material/insights:"),
     ],
 }
+if DEV:
+    pages["Visió de conjunt"].append(st.Page("views/incidentes.py", title="Incidents", icon=":material/hub:"))
+    pages["Equip tècnic"] = [st.Page("views/mvp_back.py", title="Prototip del back", icon=":material/build:")]
 pg = st.navigation(pages)
 
 # Logo de Deloitte (versión en blanco) tomado de la presentación oficial del reto
 st.logo(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "deloitte_logo_blanco.png"), size="large")
 with st.sidebar:
     st.markdown('<div class="brand">Tarvia <b>SOC</b></div>'
-                '<div class="brand-sub">Triaje de alertas de nivel 1. El sistema propone; una persona decide.</div>'
-                '<div class="brand-sub" style="margin-top:.8rem">Reto Deloitte × UAB The Hack</div>',
+                '<div class="brand-sub">Triatge d\'alertes de nivell 1. El sistema proposa; una persona decideix.</div>'
+                '<div class="brand-sub" style="margin-top:.8rem">Repte Deloitte × UAB The Hack</div>',
                 unsafe_allow_html=True)
-    st.caption(("Datos de la muestra de desarrollo (sin conexión)" if data.MODE == "fixture"
-                else "Conectado a la API del SOC") + (" · con valores de ejemplo marcados" if data.USE_EXAMPLES else ""))
+    st.caption("Mostra de 150 alertes del repte" if data.MODE == "fixture" else "Connectat a l'API del SOC")
 
 pg.run()

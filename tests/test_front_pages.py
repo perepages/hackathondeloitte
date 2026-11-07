@@ -11,12 +11,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "app.py")
 PAGES = ["views/inicio.py", "views/cola.py", "views/ticket.py", "views/contencion.py",
          "views/directo.py", "views/panel.py", "views/incidentes.py"]
+# incidentes y mvp_back están fuera del menú de la demo; con SOC_DEV=1 vuelven (y así se prueban)
 
 
 @pytest.fixture(autouse=True)
 def _fixture_mode(monkeypatch, tmp_path):
     monkeypatch.chdir(ROOT)
     monkeypatch.setenv("SOC_MODE", "fixture")
+    monkeypatch.setenv("SOC_DEV", "1")
     from core import store
     monkeypatch.setattr(store, "DB", str(tmp_path / "soc.db"))
 
@@ -34,7 +36,7 @@ def test_directo_runs_sample_batch():
     at.switch_page("views/directo.py").run()
     at.button(key="directo_go").click().run()
     assert not at.exception, at.exception
-    assert any("Alertas que esperan a una persona" in m.value for m in at.markdown)  # tarjetas de escaladas
+    assert any("Alertes que esperen una persona" in m.value for m in at.markdown)  # tarjetas de escaladas
     assert any(b.key and b.key.startswith("directo_open_") for b in at.button)
 
 
@@ -70,7 +72,7 @@ def test_contencion_aprobar_y_ejecutar():
     if runs:
         runs[0].click().run()
         assert not at.exception, at.exception
-        assert any("Hecha" in s.value for s in at.success)
+        assert any("Feta" in s.value for s in at.success)
 
 
 @pytest.mark.parametrize("page", PAGES)
@@ -92,11 +94,11 @@ def test_cola_bandeja_y_ficha():
     assert at.text_input(key="cola_analyst")  # ficha visible sin cambiar de pantalla (la más urgente)
     at.multiselect(key="cola_sev").set_value(["high"]).run()
     assert not at.exception, at.exception
-    assert any("de 150 alertas" in c.value for c in at.caption)
+    assert any("de 150 alertes" in c.value for c in at.caption)
     at.session_state["cola_open"] = "ALR-20261020-011905"
     at.run()
     assert not at.exception, at.exception
-    assert any("engañar al sistema" in e.value for e in at.error)
+    assert any("enganyar el sistema" in e.value for e in at.error)
 
 
 def test_contencion_tarjetas():
@@ -108,3 +110,12 @@ def test_contencion_tarjetas():
     assert btns
     btns[0].click().run()
     assert not at.exception, at.exception
+
+
+def test_menu_de_la_demo_sin_paginas_internas(monkeypatch):
+    """Lo que ve el jurado: sin «Prototipo del back» ni «Incidents» (solo hay un incidente de ejemplo)."""
+    monkeypatch.setenv("SOC_DEV", "0")
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    assert not at.exception, at.exception
+    with pytest.raises(ValueError):
+        at.switch_page("views/mvp_back.py")

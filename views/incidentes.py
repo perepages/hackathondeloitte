@@ -16,7 +16,7 @@ from core import data, ui
 
 SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "informational": 0}
 
-st.title("Incidentes")
+st.title("Incidents")
 rows = data.load_results()
 groups: dict[str, list] = {}
 for r in rows:
@@ -24,7 +24,7 @@ for r in rows:
         groups.setdefault(r["incident_id"], []).append(r)
 
 if not groups:
-    st.info("Todavía no hay incidentes: el back no genera incident_id.")
+    st.info("Encara no hi ha incidents: el back no agrupa alertes.")
 
 
 def _shared_entities(alerts: list[dict]) -> dict:
@@ -109,30 +109,30 @@ for inc, alerts in groups.items():
         col_title, col_badge = st.columns([4, 1])
         with col_title:
             st.markdown(
-                f"#### {inc} · {len(alerts)} alertas"
-                + (" &nbsp;<span class='ej'>dato de ejemplo</span>" if example else ""),
+                f"#### {inc} · {len(alerts)} alertes"
+                + (" &nbsp;<span class='ej'>dada d'exemple</span>" if example else ""),
                 unsafe_allow_html=True,
             )
         with col_badge:
             st.markdown(
-                f"Severidad máx.: {ui.severity_badge(max_sev)}",
+                f"Gravetat màx.: {ui.severity_badge(max_sev)}",
                 unsafe_allow_html=True,
             )
 
         # Entidades compartidas
         ent_parts = []
         if shared["hosts"]:
-            ent_parts.append("**Hosts:** " + ", ".join(f"`{str(h).replace('`', '')}`" for h in shared["hosts"]))
+            ent_parts.append("**Equips:** " + ", ".join(f"`{str(h).replace('`', '')}`" for h in shared["hosts"]))
         if shared["users"]:
-            ent_parts.append("**Usuarios:** " + ", ".join(f"`{str(u).replace('`', '')}`" for u in shared["users"]))
+            ent_parts.append("**Usuaris:** " + ", ".join(f"`{str(u).replace('`', '')}`" for u in shared["users"]))
         if shared["ips"]:
             ent_parts.append("**IPs:** " + ", ".join(f"`{str(ip).replace('`', '')}`" for ip in shared["ips"]))
         if shared["domains"]:
-            ent_parts.append("**Dominios:** " + ", ".join(f"`{str(d).replace('`', '')}`" for d in shared["domains"]))
+            ent_parts.append("**Dominis:** " + ", ".join(f"`{str(d).replace('`', '')}`" for d in shared["domains"]))
         if ent_parts:
-            st.markdown("**Entidades compartidas:** " + " · ".join(ent_parts))
+            st.markdown("**Entitats compartides:** " + " · ".join(ent_parts))
         else:
-            st.caption("Sin entidades compartidas detectadas.")
+            st.caption("No s'han detectat entitats compartides.")
 
         # Tabla resumen de alertas
         st.dataframe(
@@ -140,13 +140,13 @@ for inc, alerts in groups.items():
                 "Hora": ui.fmt_time(a["created_at"]),
                 "ID": a["alert_id"],
                 "Regla": a["rule_name"],
-                "Veredicto": ui.VERDICT_LABEL[a["verdict"]],
-                "Severidad": ui.SEVERITY_LABEL.get(a.get("severity", ""), a.get("severity", "")),
+                "Veredicte": ui.VERDICT_LABEL[a["verdict"]],
+                "Gravetat": ui.SEVERITY_LABEL.get(a.get("severity", ""), a.get("severity", "")),
             } for a in alerts]),
             hide_index=True,
             use_container_width=True,
         )
 
         # Línea temporal MITRE
-        st.markdown("**Línea temporal (fases MITRE)**")
+        st.markdown("**Línia temporal (fases MITRE)**")
         _mitre_timeline(alerts)

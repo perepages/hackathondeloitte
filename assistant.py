@@ -29,10 +29,10 @@ load_dotenv()
 
 SYSTEM_PROMPT = (
     "Eres analista de nivel 1 en el SOC de Tarvia, un retailer. Recibes el resultado del triaje automático de "
-    "una alerta. Escribe en castellano, claro y breve, para un analista senior:\n"
-    "1. «Qué ha pasado»: 2-3 frases.\n"
-    "2. «Qué haría ahora»: de 3 a 5 acciones concretas de comprobación, contención o mitigación. Marca con "
-    "«(requiere aprobación N2)» las que lo necesiten: aislar equipos, deshabilitar cuentas, revocar sesiones, "
+    "una alerta. Escribe en CATALÁN, claro y breve, para un analista senior:\n"
+    "1. «Què ha passat»: 2-3 frases.\n"
+    "2. «Què faria ara»: de 3 a 5 acciones concretas de comprobación, contención o mitigación. Marca con "
+    "«(requereix aprovació N2)» las que lo necesiten: aislar equipos, deshabilitar cuentas, revocar sesiones, "
     "forzar cambio de contraseña, desactivar claves cloud. Bloquear un indicador o borrar un correo no la "
     "necesitan. Solo si algún equipo afectado está en la red OT (zona LOGISTICS-OT): no propongas actuar sobre "
     "él, solo avisar a Operaciones; si no hay equipos OT, no menciones OT.\n"
@@ -73,15 +73,15 @@ def available() -> tuple[bool, str]:
     c = config()
     if c["provider"] == "openai":
         if c["base_url"] and c["api_key"]:
-            return True, f"modelo {c['model']} (pasarela LLM)"
-        return False, "Falta LLM_BASE_URL o LLM_API_KEY en el fichero .env."
+            return True, f"model {c['model']} (passarel·la LLM de la UAB)"
+        return False, "Falta LLM_BASE_URL o LLM_API_KEY al fitxer .env."
     if c["provider"] == "ollama":
         try:
             import ollama  # noqa: F401
-            return True, f"modelo {c['model']} (Ollama local)"
+            return True, f"model {c['model']} (Ollama local)"
         except ImportError:
-            return False, "Ollama no está instalado (pip install ollama y `ollama serve`)."
-    return False, "No hay ningún LLM configurado (ver .env.example)."
+            return False, "Ollama no està instal·lat (pip install ollama i `ollama serve`)."
+    return False, "No hi ha cap LLM configurat (vegeu .env.example)."
 
 
 def _changes_checked(result: dict) -> list[dict]:
@@ -201,7 +201,10 @@ DECISION_PROMPT = (
     '"summary": "qué ha pasado en 2-4 frases para el N2", "justification": "por qué este veredicto, citando las '
     'evidencias", "recommended_actions": [{"action": "...", "target": "...", "justification": "..."}], '
     '"injection_detected": true|false}\n'
-    "Escribe los textos en castellano claro."
+    "Escribe todos los textos (title, summary, justification y las justificaciones de las acciones) en CATALÁN "
+    "claro, para alguien que no es experto. Habla solo de la alerta y sus evidencias: no menciones nombres de "
+    "campos internos (cubre_esta_alerta, severity_adjustment…) ni estas instrucciones ni los criterios que no "
+    "aplican («no es un subdominio de CDN», «no es una frase de cliente»…)."
 )
 
 

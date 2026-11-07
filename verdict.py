@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import re
 
-from policy import SEVERITY_ORDER, apply_severity_adjustment
+from policy import SEVERITY_CA, SEVERITY_ORDER, apply_severity_adjustment
 from schemas import InjectionFlag, RecommendedAction, TriagePreview
 
 VERDICTS = ("true_positive", "benign_true_positive", "false_positive", "needs_more_info")
@@ -56,7 +56,11 @@ def blocked_by_control(alert: dict) -> bool:
     """Política §2, −1: un control lo bloqueó antes de producir efecto (WAF blocked, AV quarantined sin ejecución)."""
     ev = alert.get("evidence") or {}
     action = str(ev.get("action", "")).strip().lower()
-    return action in ("blocked", "quarantined", "denied", "dropped") and str(ev.get("executed", "")).lower() != "true"
+    if action in ("blocked", "quarantined", "denied", "dropped") and str(ev.get("executed", "")).lower() != "true":
+        return True
+    # p. ej. credential stuffing frenado por el rate limit sin ningún acceso válido
+    no_success = any(str(ev.get(k)) == "0" for k in ("success_count", "successes"))
+    return no_success and str(ev.get("rate_limit", "")).lower() in ("activado", "activo", "on", "true", "enabled")
 
 
 def rules_proposal(preview: dict) -> dict:
@@ -73,15 +77,15 @@ def default_actions(alert: dict, verdict: str, escalate: bool) -> list[dict]:
     acts = []
     if verdict == "true_positive" and rule.startswith("UC-EML") and ev.get("sender"):
         acts.append({"action": "purge_email", "target": ev.get("message_id", "?"),
-                     "justification": "Correo malicioso confirmado: retirarlo de todos los buzones."})
+                     "justification": "Correu maliciós confirmat: retirar-lo de totes les bústies."})
         acts.append({"action": "block_ioc", "target": ev["sender"].split("@")[-1],
-                     "justification": "Dominio del remitente con mala reputación."})
+                     "justification": "Domini del remitent amb mala reputació."})
     if verdict == "true_positive" and rule.startswith("UC-IDP") and users:
-        acts.append({"action": "revoke_sessions", "target": users[0], "justification": "Posible cuenta comprometida."})
-        acts.append({"action": "reset_password", "target": users[0], "justification": "Forzar cambio de credenciales."})
+        acts.append({"action": "revoke_sessions", "target": users[0], "justification": "Possible compte compromès."})
+        acts.append({"action": "reset_password", "target": users[0], "justification": "Forçar el canvi de credencials."})
     if verdict == "true_positive" and escalate and hosts and rule.startswith(("UC-EDR", "UC-NET")):
         acts.append({"action": "isolate_host", "target": hosts[0],
-                     "justification": "Ejecución o C2 confirmados en el puesto."})
+                     "justification": "Execució o C2 confirmats a l'equip."})
     return acts
 
 
@@ -115,20 +119,20 @@ def llm_proposal(preview: dict) -> dict:
 def _severity(verdict: str, matrix: str, matrix_rationale: str, vip: bool, adjustment: int) -> tuple[str, str]:
     if verdict in ("benign_true_positive", "false_positive"):
         severity = "informational" if matrix in ("informational", "low") else "low"
-        label = "actividad autorizada" if verdict == "benign_true_positive" else "falsa alarma"
-        return severity, f"{matrix_rationale} Conclusión: {label} → {severity} (política SOC §2)."
+        label = "activitat autoritzada" if verdict == "benign_true_positive" else "falsa alarma"
+        return severity, f"{matrix_rationale} Conclusió: {label} → {SEVERITY_CA[severity]} (política del SOC §2)."
     total = max(-1, min(1, (1 if vip else 0) + adjustment))
     severity = apply_severity_adjustment(matrix, total)
     reasons = []
     if vip:
-        reasons.append("+1 identidad VIP o privilegiada")
+        reasons.append("+1 identitat VIP o privilegiada")
     if adjustment > 0:
-        reasons.append("+1 ejecución o acceso confirmado")
+        reasons.append("+1 execució o accés confirmat")
     elif adjustment < 0:
-        reasons.append("−1 bloqueado por un control sin actividad posterior")
+        reasons.append("−1 bloquejat per un control sense activitat posterior")
     note = ""
     if reasons:
-        note = f" Ajustes: {', '.join(reasons)}; total {total:+d} (máximo ±1) → {severity}."
+        note = f" Ajustos: {', '.join(reasons)}; total {total:+d} (màxim ±1) → {SEVERITY_CA[severity]}."
     return severity, matrix_rationale + note
 
 
@@ -163,7 +167,7 @@ def _actions(raw: list, decision: str, ot: set[str], notes: list[str]) -> list[d
         action = str(item.get("action", "")).strip().lower()
         targets = _targets(action, str(item.get("target") or ""))
         if action not in ("escalate", "close") and not targets and item.get("target"):
-            notes.append(f"Se descarta «{action}»: el objetivo «{str(item['target'])[:60]}» no es un valor exacto.")
+            notes.append(f"Es descarta «{action}»: l'objectiu «{str(item['target'])[:60]}» no és un valor exacte.")
         expanded += [{**item, "action": action, "target": t} for t in (targets or [""])]
     for item in expanded:
         action, target = item["action"], item["target"]
@@ -172,25 +176,25 @@ def _actions(raw: list, decision: str, ot: set[str], notes: list[str]) -> list[d
         if action == "close" and decision == "escalate" or action == "escalate" and decision == "close":
             continue
         if target in ot:
-            notes.append(f"Se descarta «{action}» sobre {target}: está en la red OT; solo se avisa a Operaciones.")
+            notes.append(f"Es descarta «{action}» sobre {target}: és a la xarxa OT; només s'avisa Operacions.")
             continue
         approval = action not in NO_APPROVAL
         why = str(item.get("justification") or "").strip()
         if action == "block_ioc" and any(target == d or target.endswith("." + d) for d in DUAL_USE):
             approval = True
-            why += " Servicio legítimo de uso dual: bloquearlo de forma global requiere N2."
+            why += " Servei legítim d'ús dual: bloquejar-lo per a tota l'empresa requereix N2."
         if (action, target) in seen:
             continue
         seen.add((action, target))
         out.append({"action": action, "target": target or "ticket", "requires_approval": approval,
                     "justification": why.strip()})
     if ot and decision == "escalate":
-        out.append({"action": "escalate", "target": "Responsable de Operaciones", "requires_approval": False,
-                    "justification": "Hay equipos de la red OT afectados: no se actúa sobre ellos, solo se escala."})
+        out.append({"action": "escalate", "target": "Responsable d'Operacions", "requires_approval": False,
+                    "justification": "Hi ha equips de la xarxa OT afectats: no s'hi actua, només s'escala."})
     if not any(a["action"] == decision for a in out) and not any(a["action"] not in ("escalate", "close") for a in out):
         out.append({"action": decision, "target": "ticket", "requires_approval": False,
-                    "justification": "Escalar a N2 para revisión." if decision == "escalate"
-                    else "Sin impacto: cerrar con justificación."})
+                    "justification": "Escalar a N2 perquè ho revisi." if decision == "escalate"
+                    else "Sense impacte: tancar amb justificació."})
     return out
 
 
@@ -206,16 +210,16 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
         try:
             proposal, source = llm_proposal(data), "llm"
         except Exception as exc:  # sin LLM o respuesta inválida: reglas
-            notes.append(f"La IA no dio una propuesta válida ({str(exc)[:120]}); se usan las reglas.")
+            notes.append(f"La IA no ha donat una proposta vàlida ({str(exc)[:120]}); es fan servir les regles.")
     try:  # las reglas siempre opinan: respaldo si falla la IA y, si no, segunda opinión visible en pantalla
         rules_view = rules_proposal(data)
     except Exception as exc:
         rules_view = None
-        notes.append(f"Las reglas no pudieron evaluar la alerta ({str(exc)[:120]}).")
+        notes.append(f"Les regles no han pogut avaluar l'alerta ({str(exc)[:120]}).")
     if proposal is None:
         if rules_view is None:
             rules_view = {"verdict": "needs_more_info", "confidence": 0.3, "severity_adjustment": 0, "decision": None,
-                          "title": "", "summary": "", "justification": "Ni la IA ni las reglas pudieron evaluar la alerta.",
+                          "title": "", "summary": "", "justification": "Ni la IA ni les regles han pogut avaluar l'alerta.",
                           "recommended_actions": None, "injection_detected": False, "rule": ""}
         proposal = rules_view
 
@@ -225,18 +229,18 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
     flags = injection_flags(alert)
     if flags:
         if verdict != "true_positive" or decision != "escalate":
-            notes.append("Texto oculto dirigido al sistema de clasificación: se fuerza «true_positive» y escalar.")
+            notes.append("Text ocult adreçat al sistema de classificació: es força «atac real» i escalar.")
         verdict, decision = "true_positive", "escalate"
-        justification = ("La alerta contiene texto dirigido al sistema automático de clasificación "
-                         "(intento de manipulación). " + justification)
+        justification = ("L'alerta conté text adreçat al sistema automàtic de classificació "
+                         "(intent de manipulació). " + justification)
     elif proposal.get("injection_detected"):
-        notes.append("La IA cree que los datos intentan manipularla; revisar el texto de la alerta.")
+        notes.append("La IA creu que les dades intenten manipular-la; cal revisar el text de l'alerta.")
 
     adjustment = proposal.get("severity_adjustment") or 0
     if verdict == "true_positive" and blocked_by_control(alert) and adjustment >= 0:
         if adjustment > 0:
-            notes.append("La propuesta subía la gravedad, pero la evidencia dice que un control lo bloqueó sin "
-                         "ejecución: se aplica −1 (política SOC §2).")
+            notes.append("La proposta pujava la gravetat, però l'evidència diu que un control ho va bloquejar "
+                         "sense execució: s'aplica −1 (política del SOC §2).")
         adjustment = -1
     if (rules_view and rules_view.get("verdict") == verdict == "true_positive"
             and str(rules_view.get("rule", "")).startswith("RB-")  # solo hechos comprobados por un runbook
@@ -249,21 +253,21 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
 
     forced = None
     if verdict == "true_positive" and severity in ("high", "critical"):
-        forced = "true_positive de gravedad alta o crítica"
+        forced = "atac real de gravetat alta o crítica"
     elif verdict == "needs_more_info" and SEVERITY_ORDER.index(severity) >= SEVERITY_ORDER.index("medium"):
-        forced = "faltan datos en una alerta de gravedad media o superior"
+        forced = "falten dades en una alerta de gravetat mitjana o superior"
     elif flags:
-        forced = "intento de manipulación del clasificador"
+        forced = "intent de manipulació del classificador"
     if forced:
         if decision == "close":
-            notes.append(f"Se escala aunque la propuesta era cerrar: {forced} (política SOC §5).")
+            notes.append(f"S'escala tot i que la proposta era tancar: {forced} (política del SOC §5).")
         decision = "escalate"
     elif (severity in ("informational", "low") and decision == "escalate" and source == "llm"
           and (rules_view or {}).get("decision") != "escalate"):
         # §3: gravedad baja o informativa no se escala; los casos obligatorios del §5 (fraude, credenciales,
         # ejecución) los marcan las reglas con decision=escalate y entonces se respeta
-        notes.append(f"Se cierra aunque la IA proponía escalar: gravedad {severity} y ningún criterio de escalado "
-                     "obligatorio (política SOC §3 y §5).")
+        notes.append(f"Es tanca tot i que la IA proposava escalar: gravetat {SEVERITY_CA[severity]} i cap criteri "
+                     "d'escalat obligatori (política del SOC §3 i §5).")
         decision = "close"
     elif decision is None:
         decision = "close"
@@ -275,7 +279,7 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
 
     open_questions = list(preview.open_questions)
     if verdict == "needs_more_info":
-        open_questions.append("Las evidencias no bastan para un veredicto: una persona debe completarlo.")
+        open_questions.append("Les evidències no basten per a un veredicte: l'ha de completar una persona.")
 
     return preview.model_copy(update={
         "verdict": verdict,

@@ -1,15 +1,10 @@
-"""Panel de negocio + SLA.
+"""Panel de negocio + SLA. Textos en catalán.
 
-Dueño: PERSONA B. Punto de partida: métricas y un gráfico. Colores SIEMPRE de core/ui.py.
-Pendiente (ver la maqueta demo/triaje_demo.html, vista Panel):
-  - TODO B: severidad de la regla frente a severidad final (mapa de calor).
-  - TODO B: alertas por día, apiladas por decisión.
-  - TODO B: SLA de las escaladas con @st.fragment (hecho).
-
-
-@st.fragment(run_every="10s").
+Dueño: PERSONA B. Métricas, reparto por veredicto y por regla, mapa de calor de gravedad, alertas por día
+y SLA de las escaladas (@st.fragment, se refresca cada 10 s). Colores SIEMPRE de core/ui.py.
 """
 import datetime as dt
+from collections import Counter
 
 import altair as alt
 import pandas as pd
@@ -22,33 +17,29 @@ MIN_PER_ALERT = 8  # supuesto: minutos de un analista N1 por alerta triada a man
 # SLA por severidad (en minutos)
 SLA_MIN = {"critical": 15, "high": 30, "medium": 240, "low": 1440, "informational": 1440}
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "informational"]
+CLOSED, ESCALATED = "Tancades", "Escalades"
 
-st.title("Resumen")
-st.markdown('<p class="muted">La foto de conjunto para dirección: cuánto trabajo quita el sistema, qué tipo de '
-            "avisos llegan y qué casos escalados corren prisa.</p>", unsafe_allow_html=True)
+st.title("Resum")
+st.markdown('<p class="muted">La foto de conjunt per a la direcció: quanta feina estalvia el sistema, quin tipus '
+            "d'avisos arriben i quins casos escalats tenen pressa.</p>", unsafe_allow_html=True)
 rows = data.load_results()
 if not rows:
-    ui.empty_state("datos que resumir")
+    ui.empty_state("dades per resumir")
 n = len(rows)
 closed = sum(r["decision"] == "close" for r in rows)
 m = st.columns(4)
-m[0].metric("Alertas revisadas", n)
-m[1].metric("Se cierran sin intervención", f"{round(100 * closed / max(1, n))} %")
-m[2].metric("Necesitan a una persona", n - closed)
-m[3].metric("Horas de analista ahorradas", f"{closed * MIN_PER_ALERT / 60:.1f} h",
-            help=f"Supuesto: {MIN_PER_ALERT} min por alerta triada a mano. "
-                 f"Solo las {closed} cerradas automáticamente evitan la revisión manual.")
-
-if any("verdict" in r["example_fields"] for r in rows):
-    st.caption("Los veredictos y decisiones son de ejemplo (reglas de prueba) hasta que el back los genere.")
+m[0].metric("Alertes revisades", n)
+m[1].metric("Es tanquen sense intervenció", f"{round(100 * closed / max(1, n))} %")
+m[2].metric("Necessiten una persona", n - closed)
+m[3].metric("Hores d'analista estalviades", f"{closed * MIN_PER_ALERT / 60:.1f} h",
+            help=f"Suposició: {MIN_PER_ALERT} min per alerta triada a mà. "
+                 f"Només les {closed} tancades automàticament eviten la revisió manual.")
 
 # ── Reparto por veredicto (barra al 100 %) ────────────────────────────────────
-st.subheader("Qué concluye el sistema", anchor=False)
-from collections import Counter  # noqa: E402
-
+st.subheader("Què conclou el sistema", anchor=False)
 _cnt_v = Counter(ui.VERDICT_LABEL[r["verdict"]] for r in rows)
 # Barra única apilada al 100 %: necesita un eje y fijo ("y") para que Vega pinte una sola fila.
-_verd_vals = [{"Veredicto": k, "n": int(v), "pct": round(100 * v / max(1, n), 1), "y": "Alertas"}
+_verd_vals = [{"Veredicte": k, "n": int(v), "pct": round(100 * v / max(1, n), 1), "y": "Alertes"}
               for k, v in _cnt_v.items()]
 bar100 = (
     alt.Chart(alt.Data(values=_verd_vals))
@@ -57,7 +48,7 @@ bar100 = (
         x=alt.X("n:Q", title=None, stack="normalize",
                 axis=alt.Axis(format=".0%", grid=False)),
         color=alt.Color(
-            "Veredicto:N",
+            "Veredicte:N",
             scale=alt.Scale(
                 domain=[ui.VERDICT_LABEL[v] for v in ui.VERDICT_ORDER],
                 range=[ui.VERDICT_COLOR[v] for v in ui.VERDICT_ORDER],
@@ -65,40 +56,40 @@ bar100 = (
             legend=alt.Legend(orient="top", title=None),
         ),
         y=alt.Y("y:N", title=None, axis=None),
-        tooltip=["Veredicto:N", alt.Tooltip("n:Q", title="Alertas"), alt.Tooltip("pct:Q", format=".1f", title="%")],
+        tooltip=["Veredicte:N", alt.Tooltip("n:Q", title="Alertes"), alt.Tooltip("pct:Q", format=".1f", title="%")],
     )
     # Sin .properties(height=…): con altura fija Streamlit no pinta la barra.
 )
 st.altair_chart(bar100, use_container_width=True)
 
 # ── Veredicto por regla (barras horizontales apiladas) ────────────────────────
-st.subheader("Qué concluye, por tipo de aviso", anchor=False)
-df_rule = pd.DataFrame([{"Regla": r["rule_name"], "Veredicto": ui.VERDICT_LABEL[r["verdict"]]} for r in rows])
+st.subheader("Què conclou, per tipus d'avís", anchor=False)
+df_rule = pd.DataFrame([{"Regla": r["rule_name"], "Veredicte": ui.VERDICT_LABEL[r["verdict"]]} for r in rows])
 top_rules = df_rule["Regla"].value_counts().head(9).index.tolist()
-df_rule["Regla"] = df_rule["Regla"].where(df_rule["Regla"].isin(top_rules), "Otras")
+df_rule["Regla"] = df_rule["Regla"].where(df_rule["Regla"].isin(top_rules), "Altres")
 chart_rule = (
     alt.Chart(df_rule)
     .mark_bar()
     .encode(
         y=alt.Y("Regla:N", sort="-x", title=None, axis=alt.Axis(labelLimit=320)),
-        x=alt.X("count():Q", title="Alertas"),
+        x=alt.X("count():Q", title="Alertes"),
         color=alt.Color(
-            "Veredicto:N",
+            "Veredicte:N",
             scale=alt.Scale(
                 domain=[ui.VERDICT_LABEL[v] for v in ui.VERDICT_ORDER],
                 range=[ui.VERDICT_COLOR[v] for v in ui.VERDICT_ORDER],
             ),
             legend=alt.Legend(orient="top", title=None),
         ),
-        tooltip=["Regla", "Veredicto", "count()"],
+        tooltip=["Regla", "Veredicte", alt.Tooltip("count()", title="Alertes")],
     )
 )
 st.altair_chart(chart_rule, use_container_width=True)
 
 # ── Mapa de calor: severidad regla vs. severidad final ────────────────────────
-st.subheader("Gravedad de la regla frente a gravedad final", anchor=False)
-st.caption("Cada casilla cuenta alertas. Lo que cae fuera de la diagonal es lo que ha cambiado al tener en cuenta "
-           "qué equipo y qué persona están afectados.")
+st.subheader("Gravetat de la regla davant de la gravetat final", anchor=False)
+st.caption("Cada casella compta alertes. El que cau fora de la diagonal és el que ha canviat en tenir en compte "
+           "quin equip i quina persona estan afectats i què ha conclòs el sistema.")
 _cnt_h = Counter((ui.SEVERITY_LABEL.get(r["rule_severity"], r["rule_severity"]),
                   ui.SEVERITY_LABEL.get(r.get("severity") or "medium", r.get("severity", ""))) for r in rows)
 _heat_vals = [{"Regla": a, "Final": b, "n": int(c)} for (a, b), c in _cnt_h.items()]
@@ -108,10 +99,10 @@ heatmap = (
     alt.Chart(alt.Data(values=_heat_vals))
     .mark_rect()
     .encode(
-        x=alt.X("Regla:N", sort=sev_labels_ordered, title="Gravedad de la regla"),
-        y=alt.Y("Final:N", sort=sev_labels_ordered[::-1], title="Gravedad final"),
-        color=alt.Color("n:Q", scale=alt.Scale(scheme="blues"), title="Alertas"),
-        tooltip=["Regla:N", "Final:N", "n:Q"],
+        x=alt.X("Regla:N", sort=sev_labels_ordered, title="Gravetat de la regla"),
+        y=alt.Y("Final:N", sort=sev_labels_ordered[::-1], title="Gravetat final"),
+        color=alt.Color("n:Q", scale=alt.Scale(scheme="blues"), title="Alertes"),
+        tooltip=["Regla:N", "Final:N", alt.Tooltip("n:Q", title="Alertes")],
     )
     .properties(height=200)
 )
@@ -128,10 +119,9 @@ text_layer = (
 st.altair_chart(heatmap + text_layer, use_container_width=True)
 
 # ── Alertas por día (barras apiladas) ─────────────────────────────────────────
-st.subheader("Alertas por día", anchor=False)
+st.subheader("Alertes per dia", anchor=False)
 df_day = pd.DataFrame([
-    {"Día": r["created_at"][:10],
-     "Decisión": "Cerradas" if r["decision"] == "close" else "Escaladas"}
+    {"Dia": r["created_at"][:10], "Decisió": CLOSED if r["decision"] == "close" else ESCALATED}
     for r in rows if r.get("created_at")
 ])
 if not df_day.empty:
@@ -139,17 +129,17 @@ if not df_day.empty:
         alt.Chart(df_day)
         .mark_bar()
         .encode(
-            x=alt.X("Día:T", title="Fecha"),
-            y=alt.Y("count():Q", title="Alertas"),
+            x=alt.X("Dia:T", title="Data"),
+            y=alt.Y("count():Q", title="Alertes"),
             color=alt.Color(
-                "Decisión:N",
+                "Decisió:N",
                 scale=alt.Scale(
-                    domain=["Cerradas", "Escaladas"],
+                    domain=[CLOSED, ESCALATED],
                     range=[ui.DECISION_COLOR["close"], ui.DECISION_COLOR["escalate"]],
                 ),
                 legend=alt.Legend(orient="top", title=None),
             ),
-            tooltip=["Día", "Decisión", "count()"],
+            tooltip=["Dia", "Decisió", alt.Tooltip("count()", title="Alertes")],
         )
     )
     st.altair_chart(chart_day, use_container_width=True)
@@ -162,13 +152,13 @@ SESSION_T0 = st.session_state.setdefault("panel_t0", dt.datetime.now(dt.timezone
 @st.fragment(run_every="10s")
 def sla_table():
     """Tabla de SLA para las alertas escaladas, actualizada automáticamente."""
-    st.subheader("Plazos de las alertas escaladas (SLA)", anchor=False)
+    st.subheader("Terminis de les alertes escalades (SLA)", anchor=False)
     now = dt.datetime.now(dt.timezone.utc)
     if not any(r.get("triaged_at") for r in data.load_results()):
-        st.caption("La muestra no trae la hora de triaje: los plazos cuentan desde que se abrió esta pantalla.")
+        st.caption("Els terminis compten des que s'ha obert aquesta pantalla, com si les alertes acabessin d'entrar.")
     escalated = [r for r in data.load_results() if r["decision"] == "escalate"]
     if not escalated:
-        st.info("No hay alertas escaladas todavía.")
+        st.info("Encara no hi ha alertes escalades.")
         return
 
     filas = []
@@ -187,18 +177,18 @@ def sla_table():
         filas.append({
             "ID": r["alert_id"],
             "Regla": r["rule_name"],
-            "Sev.": ui.SEVERITY_LABEL.get(sev, sev),
-            "Revisada": "✅ " + (review["analyst"] if review else "") if review else "⏳ Pendiente",
-            "Límite SLA": f"{limit_min} min",
-            "Queda": (f"{remaining:.0f} min" if remaining >= 0 else f"vencida hace {-remaining:.0f} min")
-                      if not review else "—",
+            "Gravetat": ui.SEVERITY_LABEL.get(sev, sev),
+            "Revisada": "✅ " + (review["analyst"] if review else "") if review else "⏳ Pendent",
+            "Límit SLA": f"{limit_min} min",
+            "Queda": (f"{remaining:.0f} min" if remaining >= 0 else f"vençuda fa {-remaining:.0f} min")
+                     if not review else "—",
             "_vencida": remaining < 0 and not review,
         })
 
     df_sla = pd.DataFrame(filas)
     vencidas = df_sla["_vencida"].sum()
     if vencidas:
-        st.warning(f"{vencidas} alerta(s) han superado su plazo sin que nadie las revise.", icon="⚠️")
+        st.warning(f"{vencidas} alerta(es) han superat el termini sense que ningú les revisi.", icon="⚠️")
     df_show = df_sla.drop(columns=["_vencida"])
 
     def _color_row(row):
@@ -212,8 +202,8 @@ def sla_table():
         use_container_width=True,
     )
     st.caption(f"SLA: crítica {SLA_MIN['critical']} min · alta {SLA_MIN['high']} min · "
-               f"media {SLA_MIN['medium'] // 60} h · baja {SLA_MIN['low'] // 60} h. "
-               f"Se actualiza cada 10 s.")
+               f"mitjana {SLA_MIN['medium'] // 60} h · baixa {SLA_MIN['low'] // 60} h. "
+               f"S'actualitza cada 10 s.")
 
 
 sla_table()

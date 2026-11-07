@@ -45,6 +45,7 @@ from typing import Callable
 import streamlit as st
 
 from core import store
+from policy import criticality_ca
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.path.join(ROOT, "data", "fixture.json")
@@ -74,19 +75,19 @@ def summarize_query(q: dict, contexts: list[dict]) -> str:
     """Una frase legible para cada consulta que hizo el back."""
     path, status = q.get("path", ""), q.get("status")
     if status == "not_found":
-        return "no encontrado (desconocido no es lo mismo que limpio)"
+        return "no trobat (desconegut no vol dir net)"
     if status == "error":
         return f"error: {(q.get('note') or '')[:120]}"
     key = path.rsplit("/", 1)[-1]
     if path.startswith("/assets/") and (a := _ctx(contexts, "asset", key)):
-        return f"{a.get('hostname')} · criticidad {a.get('criticality')} · zona {a.get('zone')} · {a.get('business_service')}"
+        return f"{a.get('hostname')} · criticitat {criticality_ca(a.get('criticality'))} · zona {a.get('zone')} · {a.get('business_service')}"
     if path.startswith("/users/") and (u := _ctx(contexts, "user", key)):
-        tags = [t for t, k in (("VIP", "vip"), ("privilegiado", "privileged")) if _flag(u.get(k))]
+        tags = [t for t, k in (("VIP", "vip"), ("privilegiat", "privileged")) if _flag(u.get(k))]
         return f"{u.get('display_name')} · {u.get('title')} ({u.get('department')})" + (" · " + ", ".join(tags) if tags else "")
     if path.startswith("/intel/") and (i := _ctx(contexts, "intel", key)) is not None:
         tip, geo = i.get("tip"), i.get("geo")
-        parts = [f"TIP: {tip['reputation']} ({tip.get('tags')}, confianza {tip.get('confidence')})" if tip
-                 else "TIP: sin datos"]
+        parts = [f"TIP: {tip['reputation']} ({tip.get('tags')}, confiança {tip.get('confidence')})" if tip
+                 else "TIP: sense dades"]
         if geo:
             fl = [n for n, k in (("Tor", "is_tor"), ("VPN", "is_vpn_provider"), ("hosting", "is_hosting")) if _flag(geo.get(k))]
             parts.append(f"{geo.get('as_org')} ({geo.get('country')})" + (" · " + ", ".join(fl) if fl else ""))
@@ -95,9 +96,9 @@ def summarize_query(q: dict, contexts: list[dict]) -> str:
         return f"sandbox: {s.get('verdict', 'informe disponible')}"
     if path == "/changes":
         n = q.get("result_count") or 0
-        return f"{n} cambio(s) aprobado(s)" if n else "ningún cambio aprobado coincide"
+        return f"{n} canvi(s) aprovat(s)" if n else "cap canvi aprovat no hi coincideix"
     if path.startswith("/logs/"):
-        return f"{q.get('result_count') or 0} evento(s) en {path.split('/')[2]} (±24 h)"
+        return f"{q.get('result_count') or 0} esdeveniment(s) a {path.split('/')[2]} (±24 h)"
     return "ok"
 
 
