@@ -15,6 +15,15 @@ st.title("Triaje en directo")
 st.caption("Así verá el jurado las alertas sorpresa: entran, el sistema consulta la API y decide, "
            "y lo que se escala queda esperando a la persona.")
 
+# ── CSS para las tarjetas con borde de severidad ──────────────────────────────
+st.markdown("""<style>
+.kcard{border-left:4px solid #ccc;border-radius:6px;padding:6px 10px;margin:4px 0;
+       background:var(--background-color)}
+.kcard-critical{border-color:#d03b3b} .kcard-high{border-color:#ec835a}
+.kcard-medium{border-color:#e0a514} .kcard-low{border-color:#7f97b2}
+.kcard-informational{border-color:#a7adb7} .kcard-pending{border-color:#ccc}
+</style>""", unsafe_allow_html=True)
+
 
 def sample_ids(rows: list[dict]) -> list[str]:
     """10 de ejemplo: 5 que se cierran y 5 que se escalan, de reglas distintas."""
@@ -38,10 +47,10 @@ if not ids:
 
 go = st.button(f"▶ Iniciar triaje de {len(ids)} alertas", type="primary", key="directo_go")
 progress = st.progress(0.0, text=f"0 de {len(ids)} alertas triadas")
-names = ["Entrantes", "Investigando", "Cerradas por el sistema", "Esperan a la persona"]
+col_names = ["Entrantes", "Investigando", "Cerradas por el sistema", "Esperan a la persona ⚠️"]
 cols = st.columns(4)
 slots = []
-for col, name in zip(cols, names):
+for col, name in zip(cols, col_names):
     with col:
         st.markdown(f"**{name}**")
         slots.append(st.empty())
@@ -49,18 +58,54 @@ for col, name in zip(cols, names):
 state = {"in": list(ids), "work": None, "calls": [], "close": [], "esc": []}
 
 
-def card(alert_id: str, extra: str = "") -> str:
-    return f"`{alert_id}`" + (f"  \n{extra}" if extra else "")
+def _kcard(alert_id: str, sev: str = "pending", extra_html: str = "") -> str:
+    """Tarjeta HTML con borde de color por severidad."""
+    cls = f"kcard kcard-{sev}"
+    inner = f"<code style='font-size:.8rem'>{alert_id}</code>"
+    if extra_html:
+        inner += f"<br><small>{extra_html}</small>"
+    return f'<div class="{cls}">{inner}</div>'
+
+
+def _queries_html(calls: list[dict]) -> str:
+    parts = []
+    for c in calls:
+        icon = ui.QUERY_ICON.get(c.get("status", ""), "⚪")
+        path = str(c.get("path", "")).replace("`", "")
+        summary = ui.md(c.get("summary") or c.get("path", ""))
+        parts.append(f"{icon} <code>{path}</code><br>&nbsp;&nbsp;{summary}")
+    return "<br>".join(parts)
 
 
 def paint():
-    slots[0].markdown("\n\n".join(card(i) for i in state["in"]) or "—")
+    # Entrantes
+    html_in = "".join(_kcard(i) for i in state["in"]) or "<em>—</em>"
+    slots[0].markdown(html_in, unsafe_allow_html=True)
+
+    # Investigando
     w = state["work"]
-    slots[1].markdown(card(w, "  \n".join(f"{ui.QUERY_ICON.get(c['status'], '⚪')} {ui.md(c['path'])}" for c in state["calls"]))
-                      if w else "—")
-    slots[2].markdown("\n\n".join(card(r["alert_id"], ui.VERDICT_LABEL[r["verdict"]]) for r in state["close"]) or "—")
-    slots[3].markdown("\n\n".join(card(r["alert_id"], ui.VERDICT_LABEL[r["verdict"]] + " · " + ui.SEVERITY_LABEL[r["severity"]])
-                                  for r in state["esc"]) or "—")
+    if w:
+        slots[1].markdown(_kcard(w, extra_html=_queries_html(state["calls"])), unsafe_allow_html=True)
+    else:
+        slots[1].markdown("<em>—</em>", unsafe_allow_html=True)
+
+    # Cerradas
+    html_close = "".join(
+        _kcard(r["alert_id"], r.get("severity", "informational"),
+               ui.VERDICT_LABEL.get(r["verdict"], r["verdict"]))
+        for r in state["close"]
+    ) or "<em>—</em>"
+    slots[2].markdown(html_close, unsafe_allow_html=True)
+
+    # Esperan a la persona
+    html_esc = "".join(
+        _kcard(r["alert_id"], r.get("severity", "medium"),
+               ui.VERDICT_LABEL.get(r["verdict"], r["verdict"])
+               + " · " + ui.SEVERITY_LABEL.get(r.get("severity", ""), r.get("severity", "")))
+        for r in state["esc"]
+    ) or "<em>—</em>"
+    slots[3].markdown(html_esc, unsafe_allow_html=True)
+
     done = len(state["close"]) + len(state["esc"])
     progress.progress(done / max(1, len(ids)), text=f"{done} de {len(ids)} alertas triadas")
 
@@ -79,4 +124,16 @@ def on_event(ev: dict):
 paint()
 if go:
     data.run_triage(ids, on_event)
-    st.success(f"{len(state['close'])} cerradas por el sistema · {len(state['esc'])} esperan a la persona")
+    n_close = len(state["close"])
+    n_esc = len(state["esc"])
+    st.success(f"{n_close} cerradas por el sistema · {n_esc} esperan a la persona")
+
+    # Botones «Abrir en la cola» para cada alerta escalada
+    if state["esc"]:
+        st.markdown("### Revisar en la cola")
+        for res in state["esc"]:
+            aid = res["alert_id"]
+            sev_label = ui.SEVERITY_LABEL.get(res.get("severity", ""), res.get("severity", ""))
+            if st.button(f"Abrir {aid} ({sev_label})", key=f"directo_open_{aid}"):
+                st.session_state["selected_alert"] = aid
+                st.switch_page("views/cola.py")
