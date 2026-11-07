@@ -5,6 +5,7 @@ Pendiente B:
   - TODO B: cuando el back tenga on_event, las consultas saldrán en tiempo real (modo live).
 """
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core import data, ui
 
@@ -76,13 +77,30 @@ def on_event(ev: dict):
 paint()
 if go:
     data.run_triage(ids, on_event)
-    st.session_state["directo_ultimo"] = [r["alert_id"] for r in state["esc"]]
-    st.success(f"Listo: {len(state['close'])} cerradas por el sistema y {len(state['esc'])} esperan a una persona.")
+    esc_ids = [r["alert_id"] for r in state["esc"]]
+    st.session_state["directo_ultimo"] = esc_ids
+    if esc_ids:
+        components.html(
+            "<script>window.parent.document.getElementById('escaladas')"
+            ".scrollIntoView({behavior:'smooth',block:'start'});</script>",
+            height=0,
+        )
 
 pending = st.session_state.get("directo_ultimo") or []
 if pending:
-    st.markdown("**Abrir las que esperan a una persona:**")
+    st.markdown('<div id="escaladas"></div>', unsafe_allow_html=True)
+    st.divider()
+    st.markdown("#### Alertas que esperan a una persona")
+    st.caption("Pulsa una tarjeta para abrirla en la bandeja de alertas.")
+    cols = st.columns(min(len(pending), 4))
     for i, alert_id in enumerate(pending):
-        if st.button(placeholder(alert_id)["rule_name"], key=f"directo_open_{i}", icon=":material/open_in_new:"):
-            st.session_state["selected_alert"] = st.session_state["cola_open"] = alert_id
-            st.switch_page("views/cola.py")
+        p = placeholder(alert_id)
+        sev = p.get("severity", "medium")
+        with cols[i % len(cols)].container(border=True):
+            st.markdown(ui.severity_badge(sev), unsafe_allow_html=True)
+            st.markdown(f"**{ui.md(p.get('rule_name', alert_id))}**")
+            st.caption(p.get("source_product", "") + (" · " if p.get("source_product") else "") + alert_id)
+            if st.button("Abrir", key=f"directo_open_{i}", use_container_width=True,
+                         type="primary", icon=":material/open_in_new:"):
+                st.session_state["selected_alert"] = st.session_state["cola_open"] = alert_id
+                st.switch_page("views/cola.py")

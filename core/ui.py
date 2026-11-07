@@ -110,11 +110,10 @@ SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "in
 
 
 def option_label(view: dict) -> str:
-    """Texto de una alerta en un desplegable: punto de color y gravedad delante para elegir de un vistazo."""
+    """Texto de una alerta en un desplegable: punto de color, gravedad, ID y título."""
     sev = view.get("severity") or "informational"
-    ent = main_entity(view)
-    return (f"{SEVERITY_DOT.get(sev, '⚪')} {SEVERITY_LABEL.get(sev, sev).upper()} · {view['rule_name']}"
-            + (f" · {ent}" if ent else "") + f" · {fmt_time(view['created_at'])[5:16]}")
+    return (f"{SEVERITY_DOT.get(sev, '⚪')} {SEVERITY_LABEL.get(sev, sev).upper()} · "
+            f"{view['alert_id']} · {view['rule_name']}")
 
 
 def by_severity(views: list[dict]) -> list[dict]:
