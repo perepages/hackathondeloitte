@@ -94,6 +94,47 @@ def stepper(r: dict) -> None:
         unsafe_allow_html=True)
 
 
+def main_entity(view: dict) -> str:
+    """El equipo, usuario o indicador más representativo de la alerta, para resumirla en una línea."""
+    ent = (view.get("alert") or {}).get("entities") or {}
+    for kind in ("hosts", "users", "domains", "ips", "customers"):
+        for v in ent.get(kind) or []:
+            val = (v.get("hostname") or v.get("upn") or v.get("customer_id")) if isinstance(v, dict) else v
+            if val:
+                return f"{ENTITY_LABEL.get(kind, kind)}: {val}"
+    return ""
+
+
+def alert_cards(views: list[dict], selected: str | None, key: str, extra=None, cols: int = 3,
+                button_label: str = "Ver") -> str | None:
+    """Rejilla de tarjetas para elegir una alerta de un vistazo: franja y etiqueta de gravedad bien visibles.
+
+    Ordenadas de más a menos grave. `extra(view) -> str` añade una línea propia (p. ej. «2 acciones pendientes»).
+    Devuelve el alert_id elegido (o el que ya estaba seleccionado)."""
+    rank = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
+    views = sorted(views, key=lambda v: (rank.get(v["severity"], 9), v["created_at"]))
+    css = []
+    for i, v in enumerate(views):
+        sel = v["alert_id"] == selected
+        css.append(f".st-key-{key}_card_{i} {{ border-left:6px solid {SEVERITY_COLOR.get(v['severity'], '#999')} !important;"
+                   + (f" background:{GREEN_WASH}; box-shadow:0 0 0 2px {GREEN};" if sel else "") + " }")
+    st.markdown("<style>" + "\n".join(css) + "</style>", unsafe_allow_html=True)
+    picked = selected
+    grid = st.columns(cols)
+    for i, v in enumerate(views):
+        sel = v["alert_id"] == selected
+        with grid[i % cols].container(border=True, key=f"{key}_card_{i}"):
+            st.markdown(f"{severity_badge(v['severity'])} &nbsp; {verdict_badge(v['verdict'])}", unsafe_allow_html=True)
+            ent = esc(main_entity(v)).replace("@", "<span>@</span>")  # que el correo no se convierta en enlace
+            st.markdown(f"**{md(v['rule_name'])}**  \n<span class='muted'>{ent}"
+                        f"{' · ' if main_entity(v) else ''}{esc(fmt_time(v['created_at'])[5:16])}</span>"
+                        + (f"  \n{esc(extra(v))}" if extra else ""), unsafe_allow_html=True)
+            if st.button("✓ Seleccionada" if sel else button_label, key=f"{key}_btn_{i}", disabled=sel,
+                         type="primary" if not sel else "secondary", use_container_width=True):
+                picked = v["alert_id"]
+    return picked
+
+
 def eyebrow(text: str) -> None:
     st.markdown(f'<div class="eyebrow">{esc(text)}</div>', unsafe_allow_html=True)
 

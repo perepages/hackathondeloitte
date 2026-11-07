@@ -32,13 +32,37 @@ if not rows:
 state = st.session_state.setdefault("contencion_estado", {})  # clave -> {estado, token, aprobador, motivo}
 log = st.session_state.setdefault("contencion_log", [])
 ids = [r["alert_id"] for r in rows]
-cur = st.session_state.get("selected_alert")
-alert_id = st.selectbox("Alerta", ids, index=ids.index(cur) if cur in ids else 0, key="contencion_alert",
-                        format_func=lambda i: f"{i} · {data.get_result(i)['rule_name']}")
+
+
+def actions_of(view: dict) -> list[dict]:
+    return [a for a in view["recommended_actions"] if a["action"] not in ("close", "escalate")]
+
+
+def pending_line(view: dict) -> str:
+    acts = actions_of(view)
+    done = sum(state.get(f"{view['alert_id']}|{a['action']}|{a['target']}", {}).get("estado") == "ejecutada"
+               for a in acts)
+    return (("1 acción propuesta" if len(acts) == 1 else f"{len(acts)} acciones propuestas")
+            + (f" · {done} hecha{'s' if done != 1 else ''}" if done else " · ninguna hecha"))
+
+
+cur = st.session_state.get("contencion_sel") or st.session_state.get("selected_alert")
+cur = cur if cur in ids else None
+ui.eyebrow(f"Elige una alerta · {len(rows)} escaladas con acciones propuestas")
+picked = ui.alert_cards(rows, cur or ids[0], key="contencion_pick", extra=pending_line, button_label="Ver acciones")
+if picked != (cur or ids[0]):
+    st.session_state["contencion_sel"] = st.session_state["selected_alert"] = picked
+    st.rerun()
+alert_id = picked
 r = data.get_result(alert_id)
 ot = ui.is_ot(r)
+
+st.divider()
+ui.eyebrow("Acciones propuestas para")
+st.subheader(r["rule_name"], anchor=False)
 st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.verdict_badge(r['verdict'])} &nbsp; "
-            f"<small>{ui.md(r['justification'])}</small>", unsafe_allow_html=True)
+            f"<span class='muted'>{ui.esc(ui.main_entity(r))}</span>", unsafe_allow_html=True)
+st.markdown(f"> {ui.md(r['justification'])}")
 if ot:
     st.error("El equipo está en la red de logística (OT). La política no permite al SOC tocarla: hay que avisar a Operaciones.")
 
@@ -49,7 +73,7 @@ def record(action: dict, result: str, who: str):
                 "Aprobó": who, "Resultado": result})
 
 
-for i, act in enumerate(a for a in r["recommended_actions"] if a["action"] not in ("close", "escalate")):
+for i, act in enumerate(actions_of(r)):
     key = f"{alert_id}|{act['action']}|{act['target']}"
     st_ = state.get(key, {"estado": "propuesta"})
     dual = any(d in str(act["target"]).lower() for d in DUAL_USE)

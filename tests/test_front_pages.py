@@ -84,16 +84,26 @@ def test_paginas_en_modo_live_sin_alertas(page, monkeypatch):
 
 
 def test_cola_bandeja_y_ficha():
-    """La bandeja filtra por gravedad y la ficha se abre, navega y vuelve a la bandeja."""
+    """Una sola pantalla: la bandeja filtra por gravedad y la ficha de la alerta abierta sale debajo."""
     at = AppTest.from_file(APP, default_timeout=30).run()
     at.switch_page("views/cola.py").run()
+    assert not at.exception, at.exception
+    assert at.text_input(key="cola_analyst")  # ficha visible sin cambiar de pantalla (la más urgente)
     at.multiselect(key="cola_sev").set_value(["high"]).run()
     assert not at.exception, at.exception
     assert any("de 150 alertas" in c.value for c in at.caption)
-    at.session_state["cola_open"] = "ALR-20261006-011826"
+    at.session_state["cola_open"] = "ALR-20261020-011905"
     at.run()
-    at.button(key="cola_next").click().run()
     assert not at.exception, at.exception
-    at.button(key="cola_back").click().run()
+    assert any("engañar al sistema" in e.value for e in at.error)
+
+
+def test_contencion_tarjetas():
+    """Acciones de respuesta: se elige la alerta con tarjetas, sin desplegable."""
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.switch_page("views/contencion.py").run()
     assert not at.exception, at.exception
-    assert at.session_state["cola_open"] is None
+    btns = [b for b in at.button if b.key and b.key.startswith("contencion_pick_btn_") and not b.disabled]
+    assert btns
+    btns[0].click().run()
+    assert not at.exception, at.exception

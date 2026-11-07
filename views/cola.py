@@ -1,19 +1,23 @@
-"""Alertas: la bandeja del analista y la ficha de cada alerta. Dueño: PERSONA A.
+"""Alertas: la bandeja del analista y, debajo, la ficha de la alerta seleccionada. Dueño: PERSONA A.
 
-Dos vistas a pantalla completa, una cada vez:
-  · Bandeja: cifras clave, filtros en una fila y la tabla a todo el ancho. Pulsar una fila abre su ficha.
-  · Ficha: barra de progreso de los 5 pasos y dos columnas, «La investigación» (qué ha pasado, qué ha
-    comprobado el sistema) y «La decisión» (qué concluye, cuánto importa, plan de la IA, qué decides tú).
+Una sola pantalla:
+  · Arriba la bandeja: cifras clave, filtros en una fila y la tabla, ordenada para elegir rápido
+    (primero las que esperan a una persona y, dentro, las más graves).
+  · Debajo la ficha de la alerta seleccionada: barra de progreso de los 5 pasos y dos columnas,
+    «La investigación» y «La decisión». Al elegir otra fila, la página baja sola hasta la ficha.
 
 La alerta abierta se guarda en st.session_state["cola_open"]; "selected_alert" la comparten Informe y
-Acciones. Enlace directo a una ficha: /cola?alerta=ALR-...
+Acciones. Enlace directo a una alerta: /cola?alerta=ALR-...
 """
 import time
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from core import data, store, ui
+
+SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
 
 rows = data.load_results()
 ids = [r["alert_id"] for r in rows]
@@ -29,17 +33,20 @@ def open_alert(alert_id: str) -> None:
     st.session_state["cola_open"] = st.session_state["selected_alert"] = alert_id
 
 
-def back_to_list() -> None:
-    st.session_state["cola_open"] = None
-    st.session_state["cola_tabla_v"] = st.session_state.get("cola_tabla_v", 0) + 1  # limpia la selección
+def sort_queue(items: list[dict]) -> list[dict]:
+    """Primero lo que espera a una persona, luego lo más grave y, a igualdad, lo más reciente."""
+    newest_first = sorted(items, key=lambda r: r["created_at"], reverse=True)
+    return sorted(newest_first, key=lambda r: (not (r["decision"] == "escalate" and not r["review"]),
+                                               SEV_RANK.get(r["severity"], 9)))
 
 
 # ============================================================================ BANDEJA
-def render_list() -> None:
+def render_list() -> bool:
+    """Pinta la bandeja. Devuelve True si el usuario acaba de elegir otra alerta."""
     waiting = [r for r in rows if r["decision"] == "escalate" and not r["review"]]
     st.title("Alertas")
     st.markdown('<p class="muted">Cada fila es un aviso de una herramienta de seguridad que el sistema ya ha '
-                "revisado. Pulsa una para ver qué ha pasado, en qué se basa la conclusión y decidir.</p>",
+                "revisado. Elige una y debajo verás qué ha pasado, en qué se basa la conclusión y podrás decidir.</p>",
                 unsafe_allow_html=True)
 
     m = st.columns(4)
@@ -58,47 +65,47 @@ def render_list() -> None:
     sev = f3.multiselect("Gravedad", list(reversed(list(ui.SEVERITY_LABEL))), key="cola_sev", placeholder="Todas",
                          format_func=lambda s: ui.SEVERITY_LABEL[s].capitalize())
     q = f4.text_input("Buscar", placeholder="equipo, usuario, IP, regla…", key="cola_q").lower()
-    filt = [r for r in rows if (dec in (None, "todas") or r["decision"] == dec)
-            and (not ver or r["verdict"] in ver) and (not sev or r["severity"] in sev)
-            and (not q or q in str(r["alert"]).lower())]
+    filt = sort_queue([r for r in rows if (dec in (None, "todas") or r["decision"] == dec)
+                       and (not ver or r["verdict"] in ver) and (not sev or r["severity"] in sev)
+                       and (not q or q in str(r["alert"]).lower())])
+    st.session_state["cola_filtered"] = [r["alert_id"] for r in filt]
 
     df = pd.DataFrame([{
         "Gravedad": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
-        "Cuándo": ui.fmt_time(r["created_at"])[5:16],
+        "Estado": ("⏳ Espera a una persona" if r["decision"] == "escalate" else "Cerrada por el sistema")
+                  if not r["review"] else f"✓ Revisada por {r['review']['analyst']}",
         "Qué ha detectado": r["rule_name"],
-        "Origen": r["source_product"],
         "Conclusión": ui.VERDICT_LABEL[r["verdict"]],
-        "Propuesta": ui.DECISION_LABEL[r["decision"]],
-        "Revisada": f"✓ {r['review']['analyst']}" if r["review"] else "",
-    } for r in filt], columns=["Gravedad", "Cuándo", "Qué ha detectado", "Origen", "Conclusión", "Propuesta",
-                               "Revisada"])
+        "Origen": r["source_product"],
+        "Cuándo": ui.fmt_time(r["created_at"])[5:16],
+    } for r in filt], columns=["Gravedad", "Estado", "Qué ha detectado", "Conclusión", "Origen", "Cuándo"])
     event = st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
-                         height=min(600, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-row",
-                         key=f"cola_tabla_{st.session_state.get('cola_tabla_v', 0)}",
+                         height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-row",
+                         key="cola_tabla",
                          column_config={"Gravedad": st.column_config.TextColumn(width="small"),
                                         "Qué ha detectado": st.column_config.TextColumn(width="large")})
-    st.caption(f"{len(filt)} de {len(rows)} alertas · pulsa una fila para abrirla")
+    st.caption(f"{len(filt)} de {len(rows)} alertas · elige una fila para ver su ficha debajo")
     if event.selection.rows:
-        open_alert(filt[event.selection.rows[0]]["alert_id"])
-        st.rerun()
+        picked = filt[event.selection.rows[0]]["alert_id"]
+        if picked != st.session_state.get("cola_last_pick"):
+            st.session_state["cola_last_pick"] = picked
+            open_alert(picked)
+            return True
+    return False
 
 
 # ============================================================================ FICHA
-def render_detail(r: dict) -> None:
+def render_detail(r: dict, scroll: bool) -> None:
     a = r["alert"]
-    pos = ids.index(r["alert_id"])
-    n1, n2, n3, _ = st.columns([2, 1, 1, 4])
-    if n1.button("← Volver a la bandeja", key="cola_back", use_container_width=True):
-        back_to_list(); st.rerun()
-    if n2.button("‹ Anterior", key="cola_prev", disabled=pos == 0, use_container_width=True):
-        open_alert(ids[pos - 1]); st.rerun()
-    if n3.button("Siguiente ›", key="cola_next", disabled=pos == len(ids) - 1, use_container_width=True):
-        open_alert(ids[pos + 1]); st.rerun()
-
-    # --- cabecera
+    st.markdown('<div id="ficha"></div>', unsafe_allow_html=True)
+    if scroll:  # baja hasta la ficha al elegir otra alerta
+        components.html("<script>const f=window.parent.document.getElementById('ficha');"
+                        "if(f){f.scrollIntoView({behavior:'smooth',block:'start'});}</script>", height=0)
+    st.divider()
+    ui.eyebrow("Alerta seleccionada")
     st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.verdict_badge(r['verdict'])}"
                 f"{ui.example_tag(r, 'verdict')}", unsafe_allow_html=True)
-    st.title(r["rule_name"], anchor=False)
+    st.header(r["rule_name"], anchor=False)
     st.markdown(f'<p class="big"><b>El sistema concluye:</b> {ui.esc(ui.VERDICT_HELP[r["verdict"]])} '
                 f'<b>Propone {ui.esc(ui.DECISION_VERB[r["decision"]])}:</b> {ui.esc(ui.DECISION_HELP[r["decision"]])}</p>',
                 unsafe_allow_html=True)
@@ -240,8 +247,10 @@ def render_detail(r: dict) -> None:
                     st.caption("Escribe tu nombre para poder decidir.")
 
 
-current = data.get_result(st.session_state["cola_open"]) if st.session_state.get("cola_open") in ids else None
-if current:
-    render_detail(current)
-else:
-    render_list()
+changed = render_list()
+order = st.session_state.get("cola_filtered") or ids
+open_id = st.session_state.get("cola_open")
+if open_id not in ids:  # por defecto, la primera de la bandeja (la más urgente)
+    open_id = order[0] if order else ids[0]
+    open_alert(open_id)
+render_detail(data.get_result(open_id), scroll=changed)
