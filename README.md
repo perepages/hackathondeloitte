@@ -34,3 +34,32 @@ La interfaz se abrirá en `http://localhost:8501`.
 ## Alcance actual
 
 La primera versión muestra alertas, consulta detalles y contexto en la API simulada y calcula la severidad base con la matriz publicada. No ejecuta contención ni utiliza todavía un modelo LLM; las decisiones se presentan como preliminares para revisión humana.
+
+## Frontend (Streamlit, dos personas)
+
+Plan completo: [Plan de frontend en Streamlit](https://claude.ai/artifact/1qah4Mo2UYyjNkucHodzVA).
+Funciona también con Python 3.10.
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app.py          # datos del fixture, sin API
+$env:SOC_MODE="live"; .\.venv\Scripts\python.exe -m streamlit run app.py   # back real (API :8000)
+.\.venv\Scripts\python.exe -m pytest -q                    # incluye tests/test_front_pages.py
+```
+
+| Carpeta / fichero | Dueño | Qué es |
+| --- | --- | --- |
+| `app.py`, `core/ui.py` | A | Navegación, colores, etiquetas, matriz |
+| `views/cola.py`, `views/ticket.py`, `views/contencion.py` | A | Una alerta en profundidad y la decisión humana |
+| `core/data.py`, `core/store.py` | B | Única puerta a los datos (traduce el `TriagePreview` del back al contrato del front) y decisiones en SQLite |
+| `views/directo.py`, `views/panel.py`, `views/incidentes.py` | B | Directo, panel de negocio, incidentes |
+| `views/mvp_back.py` | back | Primera app del back, conservada como referencia |
+| `data/fixture.json` | B | 150 alertas: salida real del back + `_ejemplo` con los campos que el back aún no genera |
+| `scripts/build_fixture.py` | B | Regenera el fixture (necesita la API :8000) |
+| `demo/triaje_demo.html` | — | Maqueta HTML de referencia visual |
+
+**Contrato:** las páginas solo usan el diccionario que devuelve `core.data.to_view()` (documentado al principio
+de `core/data.py`). Los valores que vienen de `_ejemplo` se listan en `example_fields` y la interfaz los marca
+como «dato de ejemplo». Con `SOC_EXAMPLES=0` se ve solo lo que da el back.
+
+**Ramas:** persona A trabaja en `front-a`, persona B en `front-b`; ambas salen de `perebranch` y se fusionan
+en `perebranch` al menos una vez al día, con los tests en verde.
