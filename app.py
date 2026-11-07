@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import streamlit as st
+import json
+import ollama
 
 from soc_api import SocAPIError, list_alerts
 from triage import analyze_alert
@@ -129,6 +131,47 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
             st.info("No se encontraron logs relacionados en las consultas realizadas.")
     with tab_alert:
         st.json(alert)
+    st.divider()
+    st.subheader("🤖 Pla d'Acció Recomanat (Ollama)")
+    
+    # Selecció del model d'Ollama instal·lat localment
+    selected_model = "llama3"
 
+    if st.button("Generar resum d'accions", type="primary", use_container_width=True):
+        # 1. Preparar les dades rellevants per passar-les com a context
+        context_data = {
+            "alerta": alert.get("rule_name"),
+            "severitat": preview_data.get("severity"),
+            "veredicte": preview_data.get("verdict"),
+            "preguntes_obertes": preview_data.get("open_questions", []),
+            "context_addicional": preview_data.get("contexts", [])
+        }
+        
+        prompt = (
+            "Ets un analista expert d'un SOC (Centre d'Operacions de Seguretat). "
+            "A partir de les següents dades d'una alerta preliminar, genera un breu resum de la situació "
+            "i una llista de 3 a 5 accions clares i concretes de mitigació i contenció que s'haurien de prendre.\n\n"
+            f"Dades de l'alerta:\n{json.dumps(context_data, indent=2, ensure_ascii=False)}"
+        )
+
+        try:
+            with st.spinner(f"Connectant amb Ollama ({selected_model})..."):
+                # 2. Cridar l'API local d'Ollama en mode stream per a millor UX
+                response_stream = ollama.chat(
+                    model=selected_model,
+                    messages=[{"role": "user", "content": prompt}],
+                    stream=True
+                )
+                
+                # 3. Funció generadora per iterar sobre els fragments de text
+                def stream_parser():
+                    for chunk in response_stream:
+                        yield chunk['message']['content']
+                        
+                # 4. Mostrar la resposta escrivint-la en temps real
+                st.write_stream(stream_parser)
+                
+        except Exception as exc:
+            st.error(f"Error al connectar amb Ollama. Comprova que el servei s'està executant (`ollama serve`). Detall: {exc}")
 else:
     st.info("Selecciona una alerta y pulsa **Investigar alerta** para recopilar evidencias.")
