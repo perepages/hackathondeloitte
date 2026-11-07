@@ -7,7 +7,7 @@ Una sola pantalla:
     «La investigación» y «La decisión». Al elegir otra fila, la página baja sola hasta la ficha.
 
 La alerta abierta se guarda en st.session_state["cola_open"]; "selected_alert" la comparten Informe y
-Acciones. Enlace directo a una alerta: /cola?alerta=ALR-...
+Acciones. Enlace directo a una alerta: /alertes?alerta=ALR-...
 """
 import time
 
@@ -249,7 +249,7 @@ def render_detail(r: dict, scroll: bool) -> None:
                     store.delete_review(r["alert_id"])
                     st.rerun()
                 if u2.button("Veure l'informe per a N2", key="cola_ticket_after", use_container_width=True):
-                    st.switch_page("views/ticket.py")
+                    st.switch_page("views/informe_n2.py")
             else:
                 st.markdown(f"El sistema proposa: {ui.decision_badge(r['decision'])} &nbsp; "
                             f"<span class='muted'>{ui.esc(ui.DECISION_HELP[r['decision']])}</span>",

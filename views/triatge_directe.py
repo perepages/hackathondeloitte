@@ -135,4 +135,4 @@ if pending:
             if st.button("Obrir", key=f"directo_open_{i}", use_container_width=True,
                          type="primary", icon=":material/open_in_new:"):
                 st.session_state["selected_alert"] = st.session_state["cola_open"] = alert_id
-                st.switch_page("views/cola.py")
+                st.switch_page("views/alertes.py")

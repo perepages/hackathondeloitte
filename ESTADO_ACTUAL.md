@@ -57,14 +57,14 @@ back** (LLM + reglas de respaldo + política SOC encima, en `verdict.py`); solo 
 ```
 app.py ── navegación (st.navigation), tema, logo
   └─ views/                 una página por fichero
-       inicio.py            qué es el sistema, flujo en 4 pasos, cifras, recorrido de la demo
-       cola.py              Alertas: bandeja arriba + ficha de la alerta elegida debajo (5 pasos, IA, decisión)
-       ticket.py            Informe para N2 en formato Deloitte, validado y descargable
-       contencion.py        Acciones de respuesta: tarjetas por alerta + aprobar/ejecutar + registro
-       directo.py           Triaje en directo: kanban Entran → Investigando → Cerradas / Esperan a una persona
-       panel.py             Resumen: cifras, conclusiones, mapa de gravedad, por día, SLA
-       incidentes.py        Alertas agrupadas por incident_id + línea temporal MITRE
-       mvp_back.py          primera app del back, conservada
+       inici.py            qué es el sistema, flujo en 4 pasos, cifras, recorrido de la demo
+       alertes.py              Alertas: bandeja arriba + ficha de la alerta elegida debajo (5 pasos, IA, decisión)
+       informe_n2.py            Informe para N2 en formato Deloitte, validado y descargable
+       accions_resposta.py        Acciones de respuesta: tarjetas por alerta + aprobar/ejecutar + registro
+       triatge_directe.py           Triaje en directo: kanban Entran → Investigando → Cerradas / Esperan a una persona
+       resum.py             Resumen: cifras, conclusiones, mapa de gravedad, por día, SLA
+       incidents.py        Alertas agrupadas por incident_id + línea temporal MITRE
+       prototip_back.py          primera app del back, conservada
   └─ core/
        data.py              ÚNICA puerta a los datos: to_view, load_results, run_triage, analyze_live,
                             suggest_ids, approve/contain, llm_status/action_plan

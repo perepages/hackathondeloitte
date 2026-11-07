@@ -44,16 +44,16 @@ if rows and not any("verdict" in r["example_fields"] for r in rows):
 st.subheader("Recorregut", anchor=False)
 st.caption("En aquest ordre s'entén tot en cinc minuts.")
 tour = [
-    ("views/directo.py", ":material/bolt:", "1 · Triatge en directe",
+    ("views/triatge_directe.py", ":material/bolt:", "1 · Triatge en directe",
      "Entren 10 alertes i es veu com el sistema les revisa una a una: quines tanca i quines deixa a una persona."),
-    ("views/cola.py", ":material/inbox:", "2 · Alertes",
+    ("views/alertes.py", ":material/inbox:", "2 · Alertes",
      "La safata de l'analista. En obrir una alerta es veu què ha passat, què ha comprovat el sistema i per què "
      "conclou el que conclou. Aquí decideix la persona."),
-    ("views/ticket.py", ":material/description:", "3 · Informe per a N2",
+    ("views/informe_n2.py", ":material/description:", "3 · Informe per a N2",
      "El que rep l'analista sènior: un resum a punt per actuar, en el format oficial de Deloitte."),
-    ("views/contencion.py", ":material/shield:", "4 · Accions de resposta",
+    ("views/accions_resposta.py", ":material/shield:", "4 · Accions de resposta",
      "Aïllar un equip, bloquejar una IP… El sistema les proposa; només s'executen amb aprovació."),
-    ("views/panel.py", ":material/insights:", "5 · Resum",
+    ("views/resum.py", ":material/insights:", "5 · Resum",
      "Per a la direcció: quanta feina estalvia i quin tipus d'alertes arriben."),
 ]
 for path, icon, title, text in tour:

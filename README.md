@@ -49,10 +49,10 @@ $env:SOC_MODE="live"; .\.venv\Scripts\python.exe -m streamlit run app.py   # bac
 | Carpeta / fichero | Dueño | Qué es |
 | --- | --- | --- |
 | `app.py`, `core/ui.py` | A | Navegación, colores, etiquetas, matriz |
-| `views/cola.py`, `views/ticket.py`, `views/contencion.py` | A | Una alerta en profundidad y la decisión humana |
+| `views/alertes.py`, `views/informe_n2.py`, `views/accions_resposta.py` | A | Una alerta en profundidad y la decisión humana |
 | `core/data.py`, `core/store.py` | B | Única puerta a los datos (traduce el `TriagePreview` del back al contrato del front) y decisiones en SQLite |
-| `views/directo.py`, `views/panel.py`, `views/incidentes.py` | B | Directo, panel de negocio, incidentes |
-| `views/mvp_back.py` | back | Primera app del back, conservada como referencia |
+| `views/triatge_directe.py`, `views/resum.py`, `views/incidents.py` | B | Directo, panel de negocio, incidentes |
+| `views/prototip_back.py` | back | Primera app del back, conservada como referencia |
 | `data/fixture.json` | B | 150 alertas: salida real del back + `_ejemplo` con los campos que el back aún no genera |
 | `scripts/build_fixture.py` | B | Regenera el fixture (necesita la API :8000) |
 | `demo/triaje_demo.html` | — | Maqueta HTML de referencia visual |

@@ -80,7 +80,7 @@ st.markdown('<p class="muted">El que rep l\'analista sènior quan s\'escala una 
             unsafe_allow_html=True)
 alert_id = st.selectbox("Alerta", ids, index=ids.index(current), key="ticket_alert",
                         format_func=lambda i: ui.option_label(data.get_result(i)),
-                        help="Ordenades de més a menys greu")
+                        help="Ordenades de més a menys greu: 🔴 crítica · 🟠 alta · 🟡 mitjana · 🔵 baixa · ⚪ informativa")
 st.session_state["selected_alert"] = alert_id
 r = data.get_result(alert_id)
 t = build_ticket(r)
@@ -125,7 +125,7 @@ with c2:
         st.dataframe(pd.DataFrame(acts), hide_index=True, use_container_width=True)
     if any(x["requires_approval"] for x in t["recommended_actions"]):
         if st.button("Anar a aprovar aquestes accions", key="ticket_to_contencion", icon=":material/shield:"):
-            st.switch_page("views/contencion.py")
+            st.switch_page("views/accions_resposta.py")
     st.markdown("**Registres que ho avalen**")
     if t["evidence"]:
         st.dataframe(pd.DataFrame(t["evidence"]).rename(columns={"source": "Font", "event_id": "Registre",

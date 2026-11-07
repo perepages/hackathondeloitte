@@ -107,6 +107,8 @@ def main_entity(view: dict) -> str:
 
 
 # Color de cada gravedad para los distintivos de Markdown de Streamlit (:red-badge[...])
+# Punto de color de cada gravedad en los desplegables (texto plano, sin HTML): ayudan a elegir de un vistazo
+SEVERITY_DOT = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "informational": "⚪"}
 SEVERITY_MD = {"critical": "red", "high": "orange", "medium": "yellow", "low": "blue", "informational": "gray"}
 SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
 
@@ -114,7 +116,7 @@ SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "in
 def option_label(view: dict) -> str:
     """Texto de una alerta en un desplegable: punto de color, gravedad, ID y título."""
     sev = view.get("severity") or "informational"
-    return (f"{SEVERITY_LABEL.get(sev, sev).upper()} · "
+    return (f"{SEVERITY_DOT.get(sev, '⚪')} {SEVERITY_LABEL.get(sev, sev).upper()} · "
             f"{view['alert_id']} · {view['rule_name']}")
 
 
@@ -188,7 +190,7 @@ def empty_state(what: str) -> None:
     """Pantalla sin datos (modo live recién arrancado): explica qué hacer y para la página."""
     st.info(f"Encara no hi ha alertes revisades en aquesta sessió, així que no hi ha {what}. "
             "Comença pel **Triatge en directe**: carrega alertes i el sistema les revisarà.", icon=":material/info:")
-    st.page_link("views/directo.py", label="Anar al Triatge en directe", icon=":material/bolt:")
+    st.page_link("views/triatge_directe.py", label="Anar al Triatge en directe", icon=":material/bolt:")
     st.stop()
 
 

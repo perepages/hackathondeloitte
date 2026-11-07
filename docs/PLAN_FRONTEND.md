@@ -9,9 +9,9 @@ Eres **B, «la operación»**. Tu rama es `front-b`. Tus ficheros:
 
 | Fichero | Qué hacer primero |
 | --- | --- |
-| `views/directo.py` | Diseño del kanban y de las tarjetas; botón «Abrir en la cola» al acabar |
-| `views/panel.py` | Mapa de calor de severidades, alertas por día y SLA |
-| `views/incidentes.py` | Tarjeta de incidente y línea temporal (solo si hay tiempo) |
+| `views/triatge_directe.py` | Diseño del kanban y de las tarjetas; botón «Abrir en la cola» al acabar |
+| `views/resum.py` | Mapa de calor de severidades, alertas por día y SLA |
+| `views/incidents.py` | Tarjeta de incidente y línea temporal (solo si hay tiempo) |
 | `core/data.py`, `core/store.py` | Ya funcionan. Son la puerta a los datos: cualquier cambio del back se adapta aquí |
 | `data/fixture.json`, `scripts/build_fixture.py` | Datos de ejemplo; se regeneran con la API arrancada |
 
@@ -58,8 +58,8 @@ API intermedia. Las páginas nunca leen ficheros ni llaman a la API de Deloitte:
 
 ```
 app.py · navegación                                   (A)
-  ├── Páginas de A: views/cola.py · ticket.py · contencion.py
-  └── Páginas de B: views/directo.py · panel.py · incidentes.py
+  ├── Páginas de A: views/alertes.py · informe_n2.py · accions_resposta.py
+  └── Páginas de B: views/triatge_directe.py · resum.py · incidents.py
           │  (las páginas solo llaman a core/)
           ▼
 core/ui.py (A)        core/data.py (B)              core/store.py (B)
@@ -80,13 +80,13 @@ matriz                  │                 │                 │
 | `core/data.py` | B | Única puerta a los datos: cargar resultados, triar en directo, aprobar y contener |
 | `core/store.py` | B | SQLite (`data/soc.db`): decisiones del analista |
 | `data/fixture.json` | B (A puede añadir) | 150 alertas: salida real del back + campos de ejemplo |
-| `views/cola.py` | A | Cola + detalle de una alerta en 5 pasos + decisión de la persona |
-| `views/ticket.py` | A | Ficha de ticket en el formato de Deloitte, descargable |
-| `views/contencion.py` | A | Nivel 4: proponer, aprobar y ejecutar contención |
-| `views/directo.py` | B | Cargar alertas sorpresa y triarlas en vivo (kanban) |
-| `views/panel.py` | B | Panel de negocio + SLA |
-| `views/incidentes.py` | B | Niveles 2-3: alertas agrupadas y línea temporal |
-| `views/mvp_back.py` | back | Primera app del back, conservada como referencia |
+| `views/alertes.py` | A | Cola + detalle de una alerta en 5 pasos + decisión de la persona |
+| `views/informe_n2.py` | A | Ficha de ticket en el formato de Deloitte, descargable |
+| `views/accions_resposta.py` | A | Nivel 4: proponer, aprobar y ejecutar contención |
+| `views/triatge_directe.py` | B | Cargar alertas sorpresa y triarlas en vivo (kanban) |
+| `views/resum.py` | B | Panel de negocio + SLA |
+| `views/incidents.py` | B | Niveles 2-3: alertas agrupadas y línea temporal |
+| `views/prototip_back.py` | back | Primera app del back, conservada como referencia |
 
 La carpeta se llama `views/` y no `pages/` a propósito: con `st.navigation`, una carpeta `pages/` activaría el
 menú automático de Streamlit y saldrían páginas duplicadas.
@@ -137,7 +137,7 @@ con datos y los tests pasan.
 3. Arrancar la app: `.venv\Scripts\python.exe -m streamlit run app.py` y abrir http://localhost:8501. No necesita
    la API: lee `data/fixture.json`.
 4. Comprobar que todo funciona: `.venv\Scripts\python.exe -m pytest -q` (19 tests).
-5. Cada página empieza con un comentario con sus TODO. A empieza por `views/cola.py`; B, por `views/directo.py`.
+5. Cada página empieza con un comentario con sus TODO. A empieza por `views/alertes.py`; B, por `views/triatge_directe.py`.
 6. Solo para el modo live o para regenerar el fixture: dataset de Deloitte en `../DTT-UAB-The-Hack` y su API
    arrancada (`python -m uvicorn mock_soc_api:app --port 8000` desde `06_herramientas`). Para regenerar:
    `.venv\Scripts\python.exe scripts/build_fixture.py`.
@@ -170,7 +170,7 @@ Funciones:
   zona HQ-USERS»). Ya existe.
 - `query_list(queries)`: pinta la lista de consultas con un punto verde (ok), amarillo (no encontrado) o rojo (error).
 
-### Página `views/cola.py`
+### Página `views/alertes.py`
 
 Qué muestra:
 
@@ -190,7 +190,7 @@ Qué muestra:
 Hecho cuando: cualquiera de las 150 alertas muestra los 5 pasos sin error, y la decisión sigue ahí tras reiniciar
 la app.
 
-### Página `views/ticket.py`
+### Página `views/informe_n2.py`
 
 Qué muestra: la ficha que recibe el N2, en el formato de `01_contexto/ticket_salida.schema.json`: título,
 veredicto y confianza, severidad con su razón, afectados, resumen, evidencias, enriquecimiento, MITRE, acciones
@@ -201,7 +201,7 @@ Función: `build_ticket(result) -> dict`, que traduce nuestro resultado al esque
 
 Hecho cuando: el JSON descargado de cualquier alerta valida contra el esquema con `jsonschema`.
 
-### Página `views/contencion.py` (nivel 4, solo si hay tiempo)
+### Página `views/accions_resposta.py` (nivel 4, solo si hay tiempo)
 
 Qué muestra: para las alertas escaladas, las `recommended_actions` en tres estados: propuesta, aprobada y
 ejecutada. Para aprobar hacen falta el nombre del analista y el motivo, y luego se ejecuta. Llama a
@@ -237,7 +237,7 @@ persona del back.
 SQLite en `data/soc.db`. Tabla `reviews(alert_id, decision, analyst, note, at)` y funciones `save_review`,
 `get_review`, `list_reviews` y `delete_review`. El fichero `data/soc.db` no se sube a git (`*.db` en `.gitignore`).
 
-### Página `views/directo.py`
+### Página `views/triatge_directe.py`
 
 Qué muestra:
 
@@ -253,7 +253,7 @@ Qué muestra:
 
 Hecho cuando: subir un JSONL de 10 alertas las tría en menos de 1 minuto, y después se ven en la cola.
 
-### Página `views/panel.py`
+### Página `views/resum.py`
 
 Qué muestra (gráficos con Altair y la paleta de `core/ui.py`):
 
@@ -268,7 +268,7 @@ Qué muestra (gráficos con Altair y la paleta de `core/ui.py`):
 
 Hecho cuando: los números cuadran con los filtros de la cola y la tabla de SLA se actualiza sola.
 
-### Página `views/incidentes.py` (niveles 2-3, solo si hay tiempo)
+### Página `views/incidents.py` (niveles 2-3, solo si hay tiempo)
 
 Qué muestra: alertas agrupadas por `incident_id` en tarjetas de incidente (alertas, entidades compartidas,
 severidad máxima) y una línea temporal Altair de cada incidente con sus fases MITRE. Mientras el back no genere
@@ -283,7 +283,7 @@ Hecho cuando: un incidente con 3 o más alertas se ve como una sola historia.
 - **Claves de `st.session_state` con prefijo** de la página: `cola_`, `ticket_`, `directo_`, `panel_`. La única
   clave compartida es `selected_alert`.
 - **Una sola forma de ir a una alerta desde otra página:** `st.session_state["selected_alert"] = alert_id` y
-  después `st.switch_page("views/cola.py")`. La cola abre esa alerta al cargar.
+  después `st.switch_page("views/alertes.py")`. La cola abre esa alerta al cargar.
 - **Las páginas no leen ficheros ni llaman a la API de Deloitte.** Siempre pasan por `core/data.py`.
 - **El fixture manda.** Si necesitas un campo nuevo, añádelo primero al fixture con un ejemplo y apúntalo en la
   tabla del contrato. Después lo pintas.
