@@ -186,6 +186,23 @@ def analyze_live(alert_id: str) -> dict:
     return view
 
 
+def refresh(max_new: int = 5, on_progress: Callable[[int, int], None] | None = None) -> int:
+    """Botón «Actualitzar alertes». fixture: vuelve a leer la muestra. live: tría las alertas nuevas que hayan
+    entrado en la cola de la API (como mucho `max_new` por pulsación, para no hacer esperar). Devuelve cuántas."""
+    _load_fixture.clear()
+    if MODE == "fixture":
+        return 0
+    import soc_api
+    known = {r["alert_id"] for r in st.session_state.get("data_live_results", [])}
+    queue = soc_api.list_alerts(status="new", limit=100).get("items", [])
+    new = [a["alert_id"] for a in queue if a.get("alert_id") not in known][:max_new]
+    for n, alert_id in enumerate(new, 1):
+        analyze_live(alert_id)
+        if on_progress:
+            on_progress(n, len(new))
+    return len(new)
+
+
 def load_alert_ids_from_jsonl(content: bytes | str) -> list[str]:
     """IDs de un JSONL de alertas (el que nos den el día de la defensa)."""
     text = content.decode("utf-8") if isinstance(content, bytes) else content

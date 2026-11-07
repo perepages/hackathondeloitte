@@ -25,8 +25,29 @@ ids = [r["alert_id"] for r in rows]
 if (qa := st.query_params.get("alerta")) and qa in ids:
     st.session_state["cola_open"] = st.session_state["selected_alert"] = qa
     del st.query_params["alerta"]
+
+
+def title_with_refresh() -> None:
+    """Título y botón «Actualitzar alertes» (también con la bandeja vacía: es cuando más falta hace)."""
+    t1, t2 = st.columns([5, 1.4], vertical_alignment="bottom")
+    t1.title("Alertes")
+    if t2.button("Actualitzar alertes", key="cola_refresh", icon=":material/refresh:", use_container_width=True,
+                 help="Torna a carregar la safata i, connectat a l'API, tria les alertes noves que hagin entrat"):
+        try:
+            bar = st.progress(0.0, text="Buscant alertes noves…") if data.MODE != "fixture" else None
+            n = data.refresh(on_progress=(lambda i, t: bar.progress(i / t, text=f"Triant alertes noves: {i} de {t}"))
+                             if bar else None)
+            st.session_state["cola_refresh_msg"] = (f"{n} alerta(es) nova(es) a la safata." if n
+                                                    else "La safata està al dia: no hi ha alertes noves.")
+        except Exception as exc:  # p. ej. la API no responde
+            st.session_state["cola_refresh_msg"] = f"No s'han pogut buscar alertes noves: {exc}"
+        st.rerun()
+    if msg := st.session_state.pop("cola_refresh_msg", None):
+        st.toast(msg, icon=":material/refresh:")
+
+
 if not rows:
-    st.title("Alertes")
+    title_with_refresh()
     ui.empty_state("alertes a la safata")
 
 
@@ -45,7 +66,7 @@ def sort_queue(items: list[dict]) -> list[dict]:
 def render_list() -> bool:
     """Pinta la bandeja. Devuelve True si el usuario acaba de elegir otra alerta."""
     waiting = [r for r in rows if r["decision"] == "escalate" and not r["review"]]
-    st.title("Alertes")
+    title_with_refresh()
     st.markdown('<p class="muted">Cada fila és un avís d\'una eina de seguretat que el sistema ja ha '
                 "revisat. Tria'n una i a sota veuràs què ha passat, en què es basa la conclusió i podràs decidir.</p>",
                 unsafe_allow_html=True)
@@ -71,7 +92,23 @@ def render_list() -> bool:
                        and (not q or q in str(r["alert"]).lower())])
     st.session_state["cola_filtered"] = [r["alert_id"] for r in filt]
 
+    # Selección de una sola alerta: se hace clic en cualquier celda de la fila (sin casillas cuadradas) y la
+    # primera columna muestra un círculo, ◉ la abierta y ○ el resto, como una elección única.
+    changed = False
+    cells = (((st.session_state.get("cola_tabla") or {}).get("selection") or {}).get("cells")) or []
+    if cells and repr(cells[0]) != st.session_state.get("cola_last_cell"):  # un clic nuevo, no el de antes
+        st.session_state["cola_last_cell"] = repr(cells[0])
+        cell = cells[0]
+        row = cell[0] if isinstance(cell, (list, tuple)) else (cell or {}).get("row")
+        if isinstance(row, int) and 0 <= row < len(filt) and filt[row]["alert_id"] != st.session_state.get("cola_open"):
+            open_alert(filt[row]["alert_id"])
+            changed = True
+    if st.session_state.get("cola_open") not in ids:  # per defecte, la primera de la safata (la més urgent)
+        open_alert(filt[0]["alert_id"] if filt else ids[0])
+    open_now = st.session_state.get("cola_open")
+
     df = pd.DataFrame([{
+        " ": "◉" if r["alert_id"] == open_now else "○",
         "Gravetat": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
         "Estat": ("⏳ Espera una persona" if r["decision"] == "escalate" else "Tancada pel sistema")
                  if not r["review"] else f"✓ Revisada per {r['review']['analyst']}",
@@ -79,20 +116,15 @@ def render_list() -> bool:
         "Conclusió": ui.VERDICT_LABEL[r["verdict"]],
         "Origen": r["source_product"],
         "Quan": ui.fmt_time(r["created_at"])[5:16],
-    } for r in filt], columns=["Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan"])
-    event = st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
-                         height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-row",
-                         key="cola_tabla",
-                         column_config={"Gravetat": st.column_config.TextColumn(width="small"),
-                                        "Què ha detectat": st.column_config.TextColumn(width="large")})
-    st.caption(f"{len(filt)} de {len(rows)} alertes · tria una fila per veure'n la fitxa a sota")
-    if event.selection.rows:
-        picked = filt[event.selection.rows[0]]["alert_id"]
-        if picked != st.session_state.get("cola_last_pick"):
-            st.session_state["cola_last_pick"] = picked
-            open_alert(picked)
-            return True
-    return False
+    } for r in filt], columns=[" ", "Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan"])
+    st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
+                 height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-cell",
+                 key="cola_tabla",
+                 column_config={" ": st.column_config.TextColumn(width=36),
+                                "Gravetat": st.column_config.TextColumn(width="small"),
+                                "Què ha detectat": st.column_config.TextColumn(width="large")})
+    st.caption(f"{len(filt)} de {len(rows)} alertes · fes clic en una fila per veure'n la fitxa a sota")
+    return changed
 
 
 # ============================================================================ FICHA

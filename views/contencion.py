@@ -34,7 +34,6 @@ if not rows:
 state = st.session_state.setdefault("contencion_estado", {})  # clave -> {estado, token, aprobador, motivo}
 log = st.session_state.setdefault("contencion_log", [])
 SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
-rows = sorted(rows, key=lambda v: (SEV_RANK.get(v["severity"], 9), v["created_at"]))  # de més a menys greu
 
 
 def actions_of(view: dict) -> list[dict]:
@@ -58,7 +57,7 @@ def record(view: dict, action: dict, result: str, who: str):
                 "Ho va aprovar": who, "Resultat": result})
 
 
-def render_actions(view: dict, j: int) -> None:
+def render_actions(view: dict, j: str) -> None:
     """Les accions d'una alerta, dins del seu desplegable."""
     ot = ui.is_ot(view)
     st.markdown(f"{ui.severity_badge(view['severity'])} &nbsp; {ui.verdict_badge(view['verdict'])} &nbsp; "
@@ -108,16 +107,41 @@ def render_actions(view: dict, j: int) -> None:
 
 
 # ---------------------------------------------------------------------------- llista
+def pending_count(view: dict) -> int:
+    return sum(state.get(akey(view, a), {}).get("estado") != "ejecutada" for a in actions_of(view))
+
+
+def n2_count(view: dict) -> int:
+    return sum(bool(a["requires_approval"]) or a["action"] not in data.NO_APPROVAL for a in actions_of(view))
+
+
+SORTS = {  # etiqueta -> clave de orden (a igualdad, la más grave y luego la más antigua)
+    "Gravetat: de més a menys greu": lambda v: (SEV_RANK.get(v["severity"], 9), v["created_at"]),
+    "Gravetat: de menys a més greu": lambda v: (-SEV_RANK.get(v["severity"], 9), v["created_at"]),
+    "Més recents primer": lambda v: v["created_at"],  # (con reverse)
+    "Més antigues primer": lambda v: v["created_at"],
+    "Més accions pendents primer": lambda v: (-pending_count(v), SEV_RANK.get(v["severity"], 9), v["created_at"]),
+    "Més accions que necessiten N2 primer": lambda v: (-n2_count(v), SEV_RANK.get(v["severity"], 9), v["created_at"]),
+    "Tipus d'alerta (A-Z)": lambda v: (v["rule_name"].lower(), SEV_RANK.get(v["severity"], 9)),
+}
+s1, s2 = st.columns([2, 3], vertical_alignment="bottom")
+order = s1.selectbox("Ordenar per", list(SORTS), key="contencion_orden")
+sev_filter = s2.multiselect("Gravetat", [s for s in ui.SEV_RANK if any(r["severity"] == s for r in rows)],
+                            key="contencion_sev", placeholder="Totes",
+                            format_func=lambda s: ui.SEVERITY_LABEL[s].capitalize())
+rows = sorted([r for r in rows if not sev_filter or r["severity"] in sev_filter], key=SORTS[order],
+              reverse=order == "Més recents primer")
+
 open_id = st.session_state.get("contencion_sel") or st.session_state.get("selected_alert")
 ui.eyebrow(f"{len(rows)} alertes escalades amb accions proposades · obre'n una per veure-les")
-for j, r in enumerate(rows):
+for r in rows:
     entity = ui.main_entity(r).replace("@", "@​")  # que el correu no es converteixi en enllaç
     label = (f"{ui.SEVERITY_DOT.get(r['severity'], '⚪')} **{ui.SEVERITY_LABEL[r['severity']].capitalize()}** · "
              f"{ui.md(r['rule_name'])}"
              + (f" · {ui.md(entity)}" if entity else "")
              + f" · {ui.fmt_time(r['created_at'])[5:16]} · _{pending_line(r)}_")
     with st.expander(label, expanded=r["alert_id"] == open_id):
-        render_actions(r, j)
+        render_actions(r, r["alert_id"])  # claves estables aunque cambie el orden
 
 st.subheader("Registre: què s'ha fet i qui ho va aprovar", anchor=False)
 if log:

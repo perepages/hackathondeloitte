@@ -118,3 +118,23 @@ def test_menu_de_la_demo_sin_paginas_internas(monkeypatch):
     assert not at.exception, at.exception
     with pytest.raises(ValueError):
         at.switch_page("views/mvp_back.py")
+
+
+def test_cola_actualitzar_i_seleccio_amb_cercles():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.switch_page("views/cola.py").run()
+    at.button(key="cola_refresh").click().run()
+    assert not at.exception, at.exception
+    df = at.dataframe[0].value
+    assert list(df[" "]).count("◉") == 1 and set(df[" "]) <= {"◉", "○"}  # una sola alerta oberta
+
+
+def test_contencion_ordenar():
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.switch_page("views/contencion.py").run()
+    first = at.expander[0].label
+    at.selectbox(key="contencion_orden").set_value("Gravetat: de menys a més greu").run()
+    assert not at.exception, at.exception
+    assert at.expander[0].label != first
+    at.multiselect(key="contencion_sev").set_value(["critical"]).run()
+    assert all("Crítica" in e.label for e in at.expander)
