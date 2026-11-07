@@ -9,7 +9,7 @@ from streamlit.testing.v1 import AppTest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "app.py")
-PAGES = ["views/cola.py", "views/ticket.py", "views/contencion.py",
+PAGES = ["views/inicio.py", "views/cola.py", "views/ticket.py", "views/contencion.py",
          "views/directo.py", "views/panel.py", "views/incidentes.py"]
 
 
@@ -34,11 +34,12 @@ def test_directo_runs_sample_batch():
     at.switch_page("views/directo.py").run()
     at.button(key="directo_go").click().run()
     assert not at.exception, at.exception
-    assert any("esperan a la persona" in s.value for s in at.success)
+    assert any("esperan a una persona" in s.value for s in at.success)
 
 
 def test_cola_review_is_saved():
     at = AppTest.from_file(APP, default_timeout=30).run()
+    at.switch_page("views/cola.py").run()
     at.text_input(key="cola_analyst").input("Ana").run()
     at.button(key="cola_ok").click().run()
     assert not at.exception, at.exception
@@ -67,4 +68,4 @@ def test_contencion_aprobar_y_ejecutar():
     if runs:
         runs[0].click().run()
         assert not at.exception, at.exception
-        assert any("Ejecutada" in s.value for s in at.success)
+        assert any("Hecha" in s.value for s in at.success)

@@ -4,32 +4,40 @@
 
 Datos: por defecto lee data/fixture.json (no hace falta la API). Para el back real:
     $env:SOC_MODE="live"; .venv\\Scripts\\python.exe -m streamlit run app.py
+
+Páginas y dueños (los nombres de menú son para el público; el dueño solo se ve aquí):
+  A: inicio, cola, ticket, contencion   ·   B: directo, panel, incidentes   ·   back: mvp_back
 """
 import streamlit as st
 
 from core import data, ui
 
-st.set_page_config(page_title="Tarvia · Triaje N1", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Tarvia · Triaje de alertas", page_icon="🛡️", layout="wide")
 ui.inject_css()
 
 pages = {
-    "Analista · persona A": [
-        st.Page("views/cola.py", title="Cola de triaje", icon="📥", default=True),
-        st.Page("views/ticket.py", title="Ticket para N2", icon="🧾"),
-        st.Page("views/contencion.py", title="Contención", icon="🛑"),
+    "": [
+        st.Page("views/inicio.py", title="Inicio", icon=":material/home:", default=True),
     ],
-    "Operación · persona B": [
-        st.Page("views/directo.py", title="En directo", icon="⚡"),
-        st.Page("views/panel.py", title="Panel", icon="📊"),
-        st.Page("views/incidentes.py", title="Incidentes", icon="🧩"),
+    "Revisar alertas": [
+        st.Page("views/cola.py", title="Alertas", icon=":material/inbox:"),
+        st.Page("views/ticket.py", title="Informe para N2", icon=":material/description:"),
+        st.Page("views/contencion.py", title="Acciones de respuesta", icon=":material/shield:"),
     ],
-    "Referencia": [
-        st.Page("views/mvp_back.py", title="MVP del back", icon="🔧"),
+    "Visión de conjunto": [
+        st.Page("views/directo.py", title="Triaje en directo", icon=":material/bolt:"),
+        st.Page("views/panel.py", title="Resumen", icon=":material/insights:"),
+        st.Page("views/incidentes.py", title="Incidentes", icon=":material/hub:"),
+    ],
+    "Equipo técnico": [
+        st.Page("views/mvp_back.py", title="Prototipo del back", icon=":material/build:"),
     ],
 }
 pg = st.navigation(pages)
 
 with st.sidebar:
-    st.caption(f"Datos: **{data.MODE}**" + (" · con campos de ejemplo marcados" if data.USE_EXAMPLES else ""))
+    st.caption("**Tarvia · SOC** — triaje de nivel 1 asistido. El sistema propone; una persona decide.")
+    st.caption(("Datos de la muestra de desarrollo (sin conexión)" if data.MODE == "fixture"
+                else "Conectado a la API del SOC") + (" · con valores de ejemplo marcados" if data.USE_EXAMPLES else ""))
 
 pg.run()

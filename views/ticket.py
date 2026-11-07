@@ -1,6 +1,6 @@
-"""Ficha de ticket para el N2, en el formato de Deloitte (01_contexto/ticket_salida.schema.json).
+"""Informe para N2: el ticket en el formato de Deloitte (01_contexto/ticket_salida.schema.json).
 
-Dueño: PERSONA A. Arriba la ficha legible; abajo el JSON validado y descargable.
+Dueño: PERSONA A. Arriba el informe legible para una persona; abajo el JSON validado y descargable.
 """
 import json
 import os
@@ -18,10 +18,12 @@ def build_ticket(r: dict) -> dict:
     ctx = r["contexts"]
     assets = [c["data"] for c in ctx if c["kind"] == "asset"]
     decision = (r.get("review") or {}).get("decision") or r["decision"]
+    title = r["title"] if r["title"] and "title" not in r["example_fields"] else \
+        f"{r['rule_name']}: {ui.VERDICT_LABEL[r['verdict']].lower()}"
     return {
         "ticket_id": f"TKT-{r['alert_id']}",
         "alert_ids": [r["alert_id"]],
-        "title": r["title"] or r["rule_name"],
+        "title": title,
         "verdict": r["verdict"],
         "confidence": float(r["confidence"] or 0.0),
         "severity": r["severity"],
@@ -62,9 +64,13 @@ def validate(ticket: dict) -> str | None:
 rows = data.load_results()
 ids = [r["alert_id"] for r in rows]
 current = st.session_state.get("selected_alert") or next(r["alert_id"] for r in rows if r["decision"] == "escalate")
-st.title("Ticket para N2")
+
+st.title("Informe para N2")
+st.markdown('<p class="muted">Lo que recibe el analista senior cuando una alerta se escala: qué ha pasado, a quién '
+            "afecta, en qué se basa la conclusión y qué se recomienda hacer. Sigue el formato oficial de Deloitte.</p>",
+            unsafe_allow_html=True)
 alert_id = st.selectbox("Alerta", ids, index=ids.index(current), key="ticket_alert",
-                        format_func=lambda i: f"{i} · {data.get_result(i)['rule_name']}")
+                        format_func=lambda i: f"{data.get_result(i)['rule_name']} · {i}")
 st.session_state["selected_alert"] = alert_id
 r = data.get_result(alert_id)
 t = build_ticket(r)
@@ -72,70 +78,71 @@ rv = r["review"]
 
 # ---------------------------------------------------------------------------- cabecera
 with st.container(border=True):
-    st.markdown(f"{ui.severity_badge(t['severity'])} &nbsp; {ui.verdict_badge(t['verdict'])} &nbsp; "
-                f"`{t['ticket_id']}`", unsafe_allow_html=True)
+    st.markdown(f"{ui.severity_badge(t['severity'])} &nbsp; {ui.verdict_badge(t['verdict'])}"
+                f"{ui.example_tag(r, 'verdict')} &nbsp; <span class='muted'>{ui.esc(t['ticket_id'])}</span>",
+                unsafe_allow_html=True)
     st.subheader(t["title"], anchor=False)
     esc = t["escalation"]["escalate"]
-    who = (f"decidido por **{rv['analyst']}**" if rv else "propuesta del sistema, **sin revisar por una persona**")
-    (st.warning if esc else st.info)(("**Escalar a N2** · " if esc else "**Cerrar** · ") + who)
-    st.markdown(f"**Resumen.** {ui.md(t['summary'])}")
+    who = (f"decidido por {rv['analyst']}" if rv else "propuesta del sistema, todavía sin revisar por una persona")
+    (st.warning if esc else st.info)(("**Se escala a N2** · " if esc else "**Se cierra** · ") + who)
+    st.markdown(f"**Qué ha pasado.** {ui.md(t['summary'])}")
     m = st.columns(3)
-    m[0].metric("Confianza", f"{round(t['confidence'] * 100)} %" if r["confidence"] is not None else "—")
-    m[1].metric("Severidad", ui.SEVERITY_LABEL[t["severity"]])
-    m[2].metric("MITRE", ", ".join(t["mitre"]) or "—")
-    st.caption(t["severity_rationale"])
-    if r["example_fields"]:
-        st.caption("Contiene campos de ejemplo (aún no los genera el back): " + ", ".join(r["example_fields"]))
+    m[0].metric("Seguridad de la conclusión", f"{round(t['confidence'] * 100)} %" if r["confidence"] is not None else "—")
+    m[1].metric("Gravedad", ui.SEVERITY_LABEL[t["severity"]].capitalize(), help=ui.SEVERITY_HELP[t["severity"]])
+    m[2].metric("Técnica de ataque (MITRE)", ", ".join(t["mitre"]) or "—")
 
 # ---------------------------------------------------------------------------- cuerpo
 c1, c2 = st.columns(2, gap="large")
 with c1:
-    st.markdown("**Afectados**")
+    st.markdown("**A quién afecta**")
     aff = t["affected"]
-    st.dataframe(pd.DataFrame([("Usuarios", ", ".join(aff["users"]) or "—"), ("Equipos", ", ".join(aff["hosts"]) or "—"),
+    st.dataframe(pd.DataFrame([("Personas", ", ".join(aff["users"]) or "—"), ("Equipos", ", ".join(aff["hosts"]) or "—"),
                                ("Servicios de negocio", ", ".join(aff["business_services"]) or "—"),
-                               ("Clientes", ", ".join(aff["customers"]) or "—")], columns=["", "Valor"]),
+                               ("Clientes", ", ".join(aff["customers"]) or "—")], columns=["Qué", "Cuál"]),
                  hide_index=True, use_container_width=True)
-    st.markdown("**Enriquecimiento**")
+    st.markdown("**Qué se sabe de los indicadores**")
     if t["enrichment"]:
         st.dataframe(pd.DataFrame(t["enrichment"])[["indicator", "result"]].rename(
             columns={"indicator": "Indicador", "result": "Resultado"}), hide_index=True, use_container_width=True)
     else:
-        st.caption("Sin indicadores consultados.")
+        st.caption("No había IPs ni dominios que consultar.")
 with c2:
-    st.markdown("**Acciones recomendadas**")
-    acts = [{"Acción": ui.ACTION_LABEL.get(x["action"], x["action"]), "Objetivo": x["target"],
-             "Aprobación": "N2" if x["requires_approval"] else "no hace falta", "Motivo": x.get("justification", "")}
+    st.markdown(f"**Qué recomienda hacer** {ui.example_tag(r, 'recommended_actions')}", unsafe_allow_html=True)
+    acts = [{"Acción": ui.ACTION_LABEL.get(x["action"], x["action"]), "Sobre": x["target"],
+             "¿Necesita aprobación?": "Sí, de N2" if x["requires_approval"] else "No"}
             for x in t["recommended_actions"]]
     if acts:
         st.dataframe(pd.DataFrame(acts), hide_index=True, use_container_width=True)
     if any(x["requires_approval"] for x in t["recommended_actions"]):
-        if st.button("Ir a contención", key="ticket_to_contencion"):
+        if st.button("Ir a aprobar estas acciones", key="ticket_to_contencion", icon=":material/shield:"):
             st.switch_page("views/contencion.py")
-    st.markdown("**Evidencias**")
+    st.markdown("**Registros que lo respaldan**")
     if t["evidence"]:
-        st.dataframe(pd.DataFrame(t["evidence"]).rename(columns={"source": "Fuente", "event_id": "Evento",
-                                                                 "finding": "Hallazgo"}),
+        st.dataframe(pd.DataFrame(t["evidence"]).rename(columns={"source": "Fuente", "event_id": "Registro",
+                                                                 "finding": "Qué muestra"}),
                      hide_index=True, use_container_width=True)
     else:
-        st.caption("Sin eventos relacionados en los logs.")
+        st.caption("No se encontraron registros relacionados.")
 
 if t["open_questions"]:
     with st.container(border=True):
-        st.markdown("**Preguntas abiertas para el N2**")
+        st.markdown("**Lo que queda por comprobar**")
         for oq in t["open_questions"]:
             st.markdown(f"- {ui.md(oq)}")
 
 # ---------------------------------------------------------------------------- JSON
+st.divider()
 err = validate(t)
-v1, v2 = st.columns([3, 1])
+v1, v2 = st.columns([3, 1], vertical_alignment="center")
 if err is None:
-    v1.success("El ticket cumple el esquema de Deloitte (ticket_salida.schema.json).")
+    v1.success("Formato comprobado: el informe cumple el esquema oficial de Deloitte (ticket_salida.schema.json).",
+               icon=":material/verified:")
 elif err == "sin-esquema":
-    v1.caption("No encuentro el esquema en ../DTT-UAB-The-Hack; no se ha validado.")
+    v1.caption("No encuentro el esquema de Deloitte en ../DTT-UAB-The-Hack; no se ha comprobado el formato.")
 else:
-    v1.error(f"El ticket no cumple el esquema: {err}")
-v2.download_button("Descargar JSON", json.dumps(t, ensure_ascii=False, indent=2), file_name=f"{t['ticket_id']}.json",
-                   mime="application/json", use_container_width=True, key="ticket_download")
-with st.expander("Ver JSON"):
+    v1.error(f"El informe no cumple el esquema: {err}")
+v2.download_button("Descargar informe (JSON)", json.dumps(t, ensure_ascii=False, indent=2),
+                   file_name=f"{t['ticket_id']}.json", mime="application/json", use_container_width=True,
+                   key="ticket_download", icon=":material/download:")
+with st.expander("Ver el informe tal como lo recibe el sistema (JSON)"):
     st.json(t)

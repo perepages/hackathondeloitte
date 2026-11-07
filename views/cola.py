@@ -1,6 +1,7 @@
-"""Cola de triaje + investigación de una alerta en 5 pasos + decisión de la persona.
+"""Alertas: la bandeja del analista + la investigación de una alerta en 5 pasos. Dueño: PERSONA A.
 
-Dueño: PERSONA A. A la izquierda la cola, a la derecha la alerta seleccionada.
+A la izquierda la bandeja; a la derecha la alerta abierta, contada para alguien de fuera:
+qué ha pasado, qué ha comprobado el sistema, qué concluye, cuánto importa y qué decides tú.
 """
 import time
 
@@ -10,38 +11,45 @@ import streamlit as st
 from core import data, store, ui
 
 rows = data.load_results()
-pending = sum(r["decision"] == "escalate" and not r["review"] for r in rows)
+# Enlace directo a una alerta: /cola?alerta=ALR-...
+if (qa := st.query_params.get("alerta")) and any(r["alert_id"] == qa for r in rows):
+    st.session_state["selected_alert"] = qa
+    del st.query_params["alerta"]
+waiting = [r for r in rows if r["decision"] == "escalate" and not r["review"]]
 
-st.title("Cola de triaje")
-st.caption(f"{len(rows)} alertas · {pending} escaladas esperan a una persona · "
-           f"{sum(bool(r['review']) for r in rows)} revisadas")
+st.title("Alertas")
+st.markdown(f'<p class="muted">Cada fila es un aviso de una herramienta de seguridad, ya revisado por el sistema. '
+            f'Ahora mismo <b>{len(waiting)} esperan a una persona</b>. Pulsa una fila para ver la investigación.</p>',
+            unsafe_allow_html=True)
 
-left, right = st.columns([5, 6], gap="large")
+left, right = st.columns([1, 1], gap="large")
 
-# ============================================================================ cola
+# ============================================================================ bandeja
 with left:
-    dec = st.segmented_control("Propuesta", ["todas", "escalate", "close"], default="todas", key="cola_dec",
-                               format_func=lambda d: "Todas" if d == "todas" else ui.DECISION_LABEL[d])
-    ver = st.pills("Veredicto", ui.VERDICT_ORDER, selection_mode="multi", key="cola_ver",
+    dec = st.segmented_control("Mostrar", ["todas", "escalate", "close"], default="todas", key="cola_dec",
+                               format_func=lambda d: {"todas": "Todas", "escalate": "Necesitan a una persona",
+                                                      "close": "Se cierran solas"}[d])
+    ver = st.pills("Conclusión", ui.VERDICT_ORDER, selection_mode="multi", key="cola_ver",
                    format_func=lambda v: ui.VERDICT_LABEL[v])
-    q = st.text_input("Buscar", placeholder="regla, ID, usuario, host…", key="cola_q",
+    q = st.text_input("Buscar", placeholder="Buscar por equipo, usuario, IP, regla…", key="cola_q",
                       label_visibility="collapsed").lower()
     filt = [r for r in rows if (dec in (None, "todas") or r["decision"] == dec)
             and (not ver or r["verdict"] in ver) and (not q or q in str(r["alert"]).lower())]
 
     df = pd.DataFrame([{
-        "Severidad": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
-        "Hora": ui.fmt_time(r["created_at"])[5:16],
-        "Regla": r["rule_name"],
-        "Veredicto": ui.VERDICT_LABEL[r["verdict"]],
-        "Propuesta": ("⬆ " if r["decision"] == "escalate" else "") + ui.DECISION_LABEL[r["decision"]],
-        "✓": "✓" if r["review"] else "",
-    } for r in filt], columns=["Severidad", "Hora", "Regla", "Veredicto", "Propuesta", "✓"])
-    st.caption(f"{len(filt)} de {len(rows)} alertas")
-    event = st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True, height=620,
+        "Gravedad": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
+        "Qué ha detectado": r["rule_name"],
+        "Conclusión": ui.VERDICT_LABEL[r["verdict"]],
+        "Propuesta": ("Escalar" if r["decision"] == "escalate" else "Cerrar") + (" ✓" if r["review"] else ""),
+    } for r in filt], columns=["Gravedad", "Qué ha detectado", "Conclusión", "Propuesta"])
+    event = st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
+                         height=min(640, 38 + 35 * max(1, len(df))),
                          on_select="rerun", selection_mode="single-row", key="cola_tabla",
-                         column_config={"Regla": st.column_config.TextColumn(width="medium"),
-                                        "✓": st.column_config.TextColumn(width="small", help="Revisada por una persona")})
+                         column_config={"Gravedad": st.column_config.TextColumn(width="small"),
+                                        "Qué ha detectado": st.column_config.TextColumn(width="medium"),
+                                        "Propuesta": st.column_config.TextColumn(width="small",
+                                            help="✓ = ya la ha revisado una persona")})
+    st.caption(f"{len(filt)} de {len(rows)} alertas")
     if event.selection.rows:
         st.session_state["selected_alert"] = filt[event.selection.rows[0]]["alert_id"]
 
@@ -49,104 +57,112 @@ default = next((r for r in rows if r["decision"] == "escalate" and r["verdict"] 
 r = data.get_result(st.session_state.get("selected_alert") or default["alert_id"]) or default
 a = r["alert"]
 
-# ============================================================================ detalle
+# ============================================================================ investigación
 with right:
     with st.container(border=True):
-        st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.verdict_badge(r['verdict'])} &nbsp; "
-                    f"{ui.decision_badge(r['decision'])}", unsafe_allow_html=True)
+        st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.verdict_badge(r['verdict'])}"
+                    f"{ui.example_tag(r, 'verdict')}", unsafe_allow_html=True)
         st.subheader(r["rule_name"], anchor=False)
+        st.markdown(f"**El sistema concluye:** {ui.VERDICT_HELP[r['verdict']]} "
+                    f"**Propone {ui.DECISION_VERB[r['decision']]}:** {ui.DECISION_HELP[r['decision']]}")
         mitre = a.get("mitre") or {}
-        st.caption(f"`{r['alert_id']}` · {ui.fmt_time(r['created_at'])} · {r['source_product']} · {r['rule_id']} · "
-                   f"runbook {a.get('runbook') or '—'} · {mitre.get('technique_id', '')} {mitre.get('technique', '')}")
-        if r["example_fields"]:
-            st.caption("Veredicto, propuesta y acciones son datos de ejemplo hasta que el back los genere.")
+        st.caption(f"{ui.fmt_time(r['created_at'])} · origen {r['source_product']} · alerta {r['alert_id']} · "
+                   f"regla {r['rule_id']} · técnica MITRE {mitre.get('technique_id', '—')}")
 
     if r["injection_flags"]:
-        st.error("**Intento de manipulación.** El contenido de esta alerta da órdenes al sistema de clasificación. "
-                 "No se han obedecido: la alerta se trata como más sospechosa, no menos.", icon="⚠️")
+        st.error("**Intento de engañar al sistema.** El contenido de esta alerta incluye instrucciones dirigidas a "
+                 "la clasificación automática. No se han obedecido: la alerta se trata como más sospechosa, no menos.",
+                 icon="⚠️")
         for f in r["injection_flags"]:
-            st.code(f"{f['field']}: {f['excerpt']}", language=None, wrap_lines=True)
+            st.code(f["excerpt"], language=None, wrap_lines=True)
 
-    # --- 1
     with st.container(border=True):
-        st.markdown("**1 · Qué detectó la regla**")
+        ui.step(1, "Qué ha pasado", "Lo que vio la herramienta que lanzó el aviso.")
         st.text(a.get("description", ""))
-        ents = [(k, v.get("hostname") or v.get("upn") or v.get("name") or v.get("customer_id") or str(v))
-                if isinstance(v, dict) else (k, str(v))
-                for k, vals in (a.get("entities") or {}).items() for v in (vals or [])]
-        if ents:
-            st.dataframe(pd.DataFrame(ents, columns=["Entidad", "Valor"]), hide_index=True, use_container_width=True)
-        with st.expander("Evidencia de la alerta"):
+        ents = ui.entities_table(a)
+        if not ents.empty:
+            st.dataframe(ents, hide_index=True, use_container_width=True)
+        with st.expander("Datos originales de la alerta"):
             st.json(a.get("evidence") or {})
 
-    # --- 2
     with st.container(border=True):
-        h, b = st.columns([4, 2])
-        h.markdown(f"**2 · Qué consultó el sistema** · {len(r['queries'])} consultas a la API del SOC")
+        h, b = st.columns([5, 2], vertical_alignment="center")
+        with h:
+            ui.step(2, "Qué ha comprobado el sistema",
+                    f"{len(r['queries'])} consultas a las fuentes de la empresa, con lo que encontró en cada una.")
         replay = b.button("▶ Repetir", key="cola_replay", use_container_width=True,
-                          help="Muestra las consultas una a una, como las hizo el sistema")
+                          help="Vuelve a mostrar las comprobaciones una a una, en el orden en que se hicieron")
         box = st.empty()
         if replay:
             for i in range(1, len(r["queries"]) + 1):
                 with box.container():
-                    ui.query_list(r["queries"][:i])
-                time.sleep(0.5)
+                    ui.query_list(r["queries"], limit=i)
+                time.sleep(0.6)
         else:
             with box.container():
                 ui.query_list(r["queries"])
+        st.caption("🟢 encontrado · 🟡 no hay datos (que no haya datos no significa que sea seguro) · 🔴 error")
         if r["related_logs"]:
-            with st.expander(f"Logs relacionados (±24 h) · {len(r['related_logs'])}"):
+            n_logs = len(r['related_logs'])
+            with st.expander("Ver el registro de actividad relacionado" if n_logs == 1
+                             else f"Ver los {n_logs} registros de actividad relacionados"):
                 st.dataframe(r["related_logs"], hide_index=True, use_container_width=True)
 
-    # --- 3
     with st.container(border=True):
-        st.markdown(f"**3 · Veredicto** {ui.example_tag(r, 'verdict')}", unsafe_allow_html=True)
-        c1, c2 = st.columns([2, 3])
+        ui.step(3, "Qué concluye y por qué", "La conclusión y las pruebas en las que se apoya.",
+                ui.example_tag(r, "verdict"))
+        c1, c2 = st.columns([2, 3], vertical_alignment="center")
         c1.markdown(ui.verdict_badge(r["verdict"]), unsafe_allow_html=True)
         if r["confidence"] is not None:
-            c2.progress(float(r["confidence"]), text=f"confianza {round(r['confidence'] * 100)} %")
-        st.text(r["justification"] or "El back todavía no da justificación.")
+            c2.progress(float(r["confidence"]), text=f"Seguridad de la conclusión: {round(r['confidence'] * 100)} %")
+        st.markdown(f"> {ui.md(r['justification'] or 'El motor todavía no da una justificación.')}")
         if r["open_questions"]:
-            with st.expander(f"Lo que no he podido resolver · {len(r['open_questions'])}", expanded=r["verdict"] == "needs_more_info"):
+            with st.expander(f"Lo que no ha podido comprobar ({len(r['open_questions'])})",
+                             expanded=r["verdict"] == "needs_more_info"):
                 for oq in r["open_questions"]:
                     st.markdown(f"- {ui.md(oq)}")
 
-    # --- 4
     with st.container(border=True):
-        st.markdown("**4 · Severidad final** · matriz §2 de la política")
-        st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; <small>{ui.md(r['severity_rationale'])}</small>",
+        ui.step(4, "Cuánto importa", "Combina lo grave que es la regla con lo importante que es el equipo afectado, "
+                "como manda la política del SOC.")
+        st.markdown(f"{ui.severity_badge(r['severity'])} &nbsp; {ui.esc(ui.SEVERITY_HELP[r['severity']])}",
                     unsafe_allow_html=True)
-        st.dataframe(ui.severity_matrix(r["rule_severity"], r["asset_criticality"]), use_container_width=True)
-        st.caption(f"Fila: severidad de la regla ({ui.SEVERITY_LABEL.get(r['rule_severity'], r['rule_severity'])}). "
-                   f"Columna: criticidad del activo ({r['asset_criticality'] or 'sin activo en la CMDB'}).")
+        with st.expander("Ver cómo se ha calculado"):
+            st.caption(r["severity_rationale"])
+            st.dataframe(ui.severity_matrix(r["rule_severity"], r["asset_criticality"]), use_container_width=True)
+            st.caption(f"Fila: gravedad de la regla ({ui.SEVERITY_LABEL.get(r['rule_severity'], r['rule_severity'])}). "
+                       f"Columna: importancia del equipo ({r['asset_criticality'] or 'no está en el inventario'}).")
 
-    # --- 5
     with st.container(border=True):
-        st.markdown(f"**5 · Decisión de la persona** {ui.example_tag(r, 'decision')}", unsafe_allow_html=True)
-        st.markdown(f"El sistema propone: {ui.decision_badge(r['decision'])}", unsafe_allow_html=True)
+        ui.step(5, "Qué decides tú", "El sistema solo propone. La decisión, y quién la toma, queda registrada.",
+                ui.example_tag(r, "decision"))
         rv = r["review"]
         if rv:
             changed = rv["decision"] != r["decision"]
-            st.success(f"**{rv['analyst']}** decidió **{ui.DECISION_LABEL[rv['decision']]}**"
-                       + (" (corrigió al sistema)" if changed else " (aceptó la propuesta)")
+            st.success(f"**{rv['analyst']}** decidió **{ui.DECISION_VERB[rv['decision']]}**"
+                       + (" y corrigió al sistema" if changed else ", como proponía el sistema")
                        + f" · {rv['at'].replace('T', ' ')[:16]} UTC" + (f"  \nNota: {ui.md(rv['note'])}" if rv["note"] else ""))
             u1, u2 = st.columns(2)
-            if u1.button("Deshacer decisión", key="cola_undo", use_container_width=True):
+            if u1.button("Deshacer la decisión", key="cola_undo", use_container_width=True):
                 store.delete_review(r["alert_id"])
                 st.rerun()
-            if u2.button("Ver ticket para N2", key="cola_ticket_after", use_container_width=True):
+            if u2.button("Ver el informe para N2", key="cola_ticket_after", use_container_width=True):
                 st.switch_page("views/ticket.py")
         else:
+            st.markdown(f"El sistema propone: {ui.decision_badge(r['decision'])} &nbsp; "
+                        f"<span class='muted'>{ui.esc(ui.DECISION_HELP[r['decision']])}</span>", unsafe_allow_html=True)
             other = "close" if r["decision"] == "escalate" else "escalate"
-            analyst = st.text_input("Analista", key="cola_analyst", placeholder="tu nombre")
-            note = st.text_input("Nota (opcional)", key="cola_note")
+            c1, c2 = st.columns(2)
+            analyst = c1.text_input("Tu nombre", key="cola_analyst", placeholder="p. ej. Ana García")
+            note = c2.text_input("Nota (opcional)", key="cola_note", placeholder="por qué decides esto")
             b1, b2 = st.columns(2)
-            if b1.button(f"Aceptar: {ui.DECISION_LABEL[r['decision']]}", type="primary", disabled=not analyst,
-                         key="cola_ok", use_container_width=True):
+            if b1.button(f"✓ De acuerdo: {ui.DECISION_VERB[r['decision']]}", type="primary",
+                         disabled=not analyst, key="cola_ok", use_container_width=True):
                 store.save_review(r["alert_id"], r["decision"], analyst, note)
                 st.rerun()
-            if b2.button(f"Corregir: {ui.DECISION_LABEL[other]}", disabled=not analyst, key="cola_fix",
+            if b2.button(f"✗ No, mejor {ui.DECISION_VERB[other]}", disabled=not analyst, key="cola_fix",
                          use_container_width=True):
                 store.save_review(r["alert_id"], other, analyst, note)
                 st.rerun()
-            st.caption("El sistema no ejecuta nada por su cuenta: solo propone. Escribe tu nombre para decidir.")
+            if not analyst:
+                st.caption("Escribe tu nombre para poder decidir.")

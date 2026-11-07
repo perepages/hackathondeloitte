@@ -1,0 +1,23 @@
+# Tema común de la app (lo usan todas las páginas; dueño: persona A).
+# Colores de datos (veredicto, severidad) NO van aquí: están en core/ui.py.
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#2346c8"
+backgroundColor = "#f7f8fa"
+secondaryBackgroundColor = "#eef1f5"
+textColor = "#16202e"
+linkColor = "#2346c8"
+borderColor = "#dce1e8"
+showWidgetBorder = true
+baseRadius = "0.5rem"
+font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+headingFont = "IBM Plex Sans Condensed:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap"
+codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+headingFontWeights = [600, 600, 600]
+
+[theme.sidebar]
+backgroundColor = "#eef1f5"
