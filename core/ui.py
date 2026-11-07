@@ -105,6 +105,24 @@ def main_entity(view: dict) -> str:
     return ""
 
 
+SEVERITY_DOT = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "informational": "⚪"}
+SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
+
+
+def option_label(view: dict) -> str:
+    """Texto de una alerta en un desplegable: punto de color y gravedad delante para elegir de un vistazo."""
+    sev = view.get("severity") or "informational"
+    ent = main_entity(view)
+    return (f"{SEVERITY_DOT.get(sev, '⚪')} {SEVERITY_LABEL.get(sev, sev).upper()} · {view['rule_name']}"
+            + (f" · {ent}" if ent else "") + f" · {fmt_time(view['created_at'])[5:16]}")
+
+
+def by_severity(views: list[dict]) -> list[dict]:
+    """De más a menos grave y, a igual gravedad, lo más reciente primero."""
+    newest = sorted(views, key=lambda v: v["created_at"], reverse=True)
+    return sorted(newest, key=lambda v: SEV_RANK.get(v.get("severity"), 9))
+
+
 def alert_cards(views: list[dict], selected: str | None, key: str, extra=None, cols: int = 3,
                 button_label: str = "Ver") -> str | None:
     """Rejilla de tarjetas para elegir una alerta de un vistazo: franja y etiqueta de gravedad bien visibles.

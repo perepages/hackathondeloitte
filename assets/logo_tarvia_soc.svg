@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="300" height="64" viewBox="0 0 300 64" role="img" aria-label="Tarvia SOC">
-  <rect x="2" y="14" width="34" height="34" rx="7" fill="none" stroke="#86bc25" stroke-width="4"/>
-  <path d="M11 31 l6 6 l11 -13" fill="none" stroke="#86bc25" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="50" y="43" font-family="Open Sans, Arial, sans-serif" font-size="30" font-weight="300" fill="#ffffff">Tarvia</text>
-  <text x="146" y="43" font-family="Open Sans, Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">SOC</text>
-</svg>

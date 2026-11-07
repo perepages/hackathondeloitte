@@ -62,7 +62,7 @@ def validate(ticket: dict) -> str | None:
 
 
 rows = data.load_results()
-ids = [r["alert_id"] for r in rows]
+ids = [r["alert_id"] for r in ui.by_severity(rows)]  # en el desplegable, de más a menos grave
 if not rows:
     st.title("Informe para N2")
     ui.empty_state("informes")
@@ -75,7 +75,8 @@ st.markdown('<p class="muted">Lo que recibe el analista senior cuando una alerta
             "afecta, en qué se basa la conclusión y qué se recomienda hacer. Sigue el formato oficial de Deloitte.</p>",
             unsafe_allow_html=True)
 alert_id = st.selectbox("Alerta", ids, index=ids.index(current), key="ticket_alert",
-                        format_func=lambda i: f"{data.get_result(i)['rule_name']} · {i}")
+                        format_func=lambda i: ui.option_label(data.get_result(i)),
+                        help="🔴 crítica · 🟠 alta · 🟡 media · 🔵 baja · ⚪ informativa")
 st.session_state["selected_alert"] = alert_id
 r = data.get_result(alert_id)
 t = build_ticket(r)

@@ -186,30 +186,6 @@ def render_detail(r: dict, scroll: bool) -> None:
                 st.caption(f"Fila: gravedad de la regla ({ui.SEVERITY_LABEL.get(r['rule_severity'], r['rule_severity'])})."
                            f" Columna: importancia del equipo ({r['asset_criticality'] or 'no está en el inventario'}).")
 
-        # Plan de acción redactado por el LLM del back (assistant.py), como ayuda antes de decidir
-        with st.container(border=True):
-            llm_ok, llm_info = data.llm_status()
-            ui.step("✦", "Borrador del plan de acción",
-                    "Un modelo de lenguaje resume la situación y propone qué hacer. Es una ayuda para decidir, "
-                    "no una decisión: puede equivocarse y no ejecuta nada.")
-            plans = st.session_state.setdefault("cola_plans", {})
-            if r["alert_id"] in plans:
-                st.markdown(ui.llm_md(plans[r["alert_id"]]))
-                st.caption(f"Redactado por IA · {llm_info} · los datos de la alerta se le pasan como no fiables, "
-                           "así que no obedece instrucciones escondidas en ellos.")
-            elif llm_ok:
-                if st.button("Redactar plan con la IA", key="cola_plan_btn", icon=":material/auto_awesome:"):
-                    try:
-                        with st.spinner("Redactando…"):
-                            text = st.write_stream(data.action_plan(r))
-                        plans[r["alert_id"]] = text if isinstance(text, str) else "".join(map(str, text))
-                        st.rerun()
-                    except Exception as exc:  # pasarela caída, timeout…
-                        st.error(f"No se ha podido redactar el plan: {exc}")
-                st.caption(f"Tarda unos segundos · {llm_info}.")
-            else:
-                st.caption(f"No disponible: {llm_info} El resto del triaje funciona igual sin IA.")
-
         with st.container(border=True):
             ui.step(5, "Qué decides tú", "El sistema solo propone. La decisión, y quién la toma, queda registrada.",
                     ui.example_tag(r, "decision"))
@@ -245,6 +221,31 @@ def render_detail(r: dict, scroll: bool) -> None:
                     st.rerun()
                 if not analyst:
                     st.caption("Escribe tu nombre para poder decidir.")
+
+        # Plan de acción redactado por el LLM del back (assistant.py), como ayuda; va debajo de la decisión para que
+        # esta no se desplace mientras la IA escribe
+        with st.container(border=True):
+            llm_ok, llm_info = data.llm_status()
+            ui.step("✦", "Borrador del plan de acción",
+                    "Un modelo de lenguaje resume la situación y propone qué hacer. Es una ayuda para decidir, "
+                    "no una decisión: puede equivocarse y no ejecuta nada.")
+            plans = st.session_state.setdefault("cola_plans", {})
+            if r["alert_id"] in plans:
+                st.markdown(ui.llm_md(plans[r["alert_id"]]))
+                st.caption(f"Redactado por IA · {llm_info} · los datos de la alerta se le pasan como no fiables, "
+                           "así que no obedece instrucciones escondidas en ellos.")
+            elif llm_ok:
+                if st.button("Redactar plan con la IA", key="cola_plan_btn", icon=":material/auto_awesome:"):
+                    try:
+                        with st.spinner("Redactando…"):
+                            text = st.write_stream(data.action_plan(r))
+                        plans[r["alert_id"]] = text if isinstance(text, str) else "".join(map(str, text))
+                        st.rerun()
+                    except Exception as exc:  # pasarela caída, timeout…
+                        st.error(f"No se ha podido redactar el plan: {exc}")
+                st.caption(f"Tarda unos segundos · {llm_info}.")
+            else:
+                st.caption(f"No disponible: {llm_info} El resto del triaje funciona igual sin IA.")
 
 
 changed = render_list()

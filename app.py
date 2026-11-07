@@ -37,9 +37,11 @@ pages = {
 }
 pg = st.navigation(pages)
 
-st.logo(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_tarvia_soc.svg"), size="large")
+# Logo de Deloitte (versión en blanco) tomado de la presentación oficial del reto
+st.logo(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "deloitte_logo_blanco.png"), size="large")
 with st.sidebar:
-    st.markdown('<div class="brand-sub">Triaje de alertas de nivel 1. El sistema propone; una persona decide.</div>'
+    st.markdown('<div class="brand">Tarvia <b>SOC</b></div>'
+                '<div class="brand-sub">Triaje de alertas de nivel 1. El sistema propone; una persona decide.</div>'
                 '<div class="brand-sub" style="margin-top:.8rem">Reto Deloitte × UAB The Hack</div>',
                 unsafe_allow_html=True)
     st.caption(("Datos de la muestra de desarrollo (sin conexión)" if data.MODE == "fixture"
