@@ -84,5 +84,5 @@ if pending:
     st.markdown("**Abrir las que esperan a una persona:**")
     for i, alert_id in enumerate(pending):
         if st.button(placeholder(alert_id)["rule_name"], key=f"directo_open_{i}", icon=":material/open_in_new:"):
-            st.session_state["selected_alert"] = alert_id
+            st.session_state["selected_alert"] = st.session_state["cola_open"] = alert_id
             st.switch_page("views/cola.py")

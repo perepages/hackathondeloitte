@@ -8,6 +8,8 @@ Datos: por defecto lee data/fixture.json (no hace falta la API). Para el back re
 Páginas y dueños (los nombres de menú son para el público; el dueño solo se ve aquí):
   A: inicio, cola, ticket, contencion   ·   B: directo, panel, incidentes   ·   back: mvp_back
 """
+import os
+
 import streamlit as st
 
 from core import data, ui
@@ -35,8 +37,11 @@ pages = {
 }
 pg = st.navigation(pages)
 
+st.logo(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "logo_tarvia_soc.svg"), size="large")
 with st.sidebar:
-    st.caption("**Tarvia · SOC** — triaje de nivel 1 asistido. El sistema propone; una persona decide.")
+    st.markdown('<div class="brand-sub">Triaje de alertas de nivel 1. El sistema propone; una persona decide.</div>'
+                '<div class="brand-sub" style="margin-top:.8rem">Reto Deloitte × UAB The Hack</div>',
+                unsafe_allow_html=True)
     st.caption(("Datos de la muestra de desarrollo (sin conexión)" if data.MODE == "fixture"
                 else "Conectado a la API del SOC") + (" · con valores de ejemplo marcados" if data.USE_EXAMPLES else ""))
 

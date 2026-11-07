@@ -21,11 +21,13 @@ from policy import CRITICALITY_ORDER, SEVERITY_ORDER, base_severity
 VERDICT_COLOR = {"false_positive": "#2a78d6", "true_positive": "#eb6834",
                  "benign_true_positive": "#1baf7a", "needs_more_info": "#eda100"}
 VERDICT_ORDER = ["true_positive", "needs_more_info", "benign_true_positive", "false_positive"]
-SEVERITY_COLOR = {"critical": "#c62f2f", "high": "#e0703f", "medium": "#d29a12",
+SEVERITY_COLOR = {"critical": "#da291c", "high": "#e0703f", "medium": "#d29a12",
                   "low": "#7f97b2", "informational": "#a7adb7"}
-DECISION_COLOR = {"close": "#5b6b80", "escalate": "#c62f2f"}
+DECISION_COLOR = {"close": "#53565a", "escalate": "#da291c"}
 QUERY_ICON = {"ok": "🟢", "not_found": "🟡", "error": "🔴"}
-INK, MUTED, LINE, ACCENT = "#16202e", "#5d6879", "#dce1e8", "#2346c8"
+# Interfaz (línea visual tipo Deloitte): negro, grises, azul petróleo interactivo y verde solo de acento
+INK, MUTED, LINE, ACCENT = "#000000", "#666666", "#e3e3e3", "#1076a8"
+GREEN, GREEN_DARK, GREEN_WASH, SOFT = "#86bc25", "#5c8a1a", "#eef7e0", "#f5f5f5"
 
 # ----------------------------------------------------------------------------- lenguaje claro
 VERDICT_LABEL = {"true_positive": "Ataque real", "benign_true_positive": "Actividad autorizada",
@@ -79,6 +81,23 @@ def md(text: str) -> str:
     return re.sub(r"([\\`*_{}\[\]()#+\-.!|>~<])", r"\\\1", html.escape(str(text), quote=False))
 
 
+def stepper(r: dict) -> None:
+    """Barra de progreso de los 5 pasos del triaje de una alerta (los 4 primeros los hace el sistema)."""
+    rv = r.get("review")
+    steps = [("done", "Detectada", r.get("source_product", "")),
+             ("done", "Comprobada", f"{len(r.get('queries', []))} consultas"),
+             ("done", "Concluida", VERDICT_LABEL[r["verdict"]]),
+             ("done", "Priorizada", f"gravedad {SEVERITY_LABEL.get(r['severity'], r['severity'])}"),
+             ("done" if rv else "now", "Decidida", f"por {rv['analyst']}" if rv else "espera a una persona")]
+    st.markdown('<div class="stepper">' + "".join(
+        f'<div class="{c}"><span></span><b>{esc(t)}</b>{esc(sub)}</div>' for c, t, sub in steps) + "</div>",
+        unsafe_allow_html=True)
+
+
+def eyebrow(text: str) -> None:
+    st.markdown(f'<div class="eyebrow">{esc(text)}</div>', unsafe_allow_html=True)
+
+
 def empty_state(what: str) -> None:
     """Pantalla sin datos (modo live recién arrancado): explica qué hacer y para la página."""
     st.info(f"Todavía no hay alertas revisadas en esta sesión, así que no hay {what}. "
@@ -99,21 +118,36 @@ def fmt_time(iso: str) -> str:
 # ----------------------------------------------------------------------------- estilo
 def inject_css() -> None:
     st.markdown(f"""<style>
-      .block-container {{ padding-top: 2.2rem; }}
-      h1 {{ letter-spacing: -.01em; }}
+      .block-container {{ padding-top: 2rem; }}
+      h1 {{ font-weight:300 !important; letter-spacing:-.01em; }}
+      h1::after {{ content:""; display:block; width:3rem; height:4px; background:{GREEN}; margin-top:.6rem; border-radius:2px; }}
+      [data-testid="stVerticalBlockBorderWrapper"] {{ border-radius:12px; }}
+      .stepper {{ display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0; margin:.2rem 0 .4rem; }}
+      .stepper div {{ position:relative; padding-top:1.4rem; font-size:.82rem; color:{MUTED}; text-align:center; line-height:1.3; }}
+      .stepper div::before {{ content:""; position:absolute; top:.45rem; left:0; right:0; height:3px; background:{LINE}; }}
+      .stepper div.done::before {{ background:{GREEN}; }}
+      .stepper div span {{ position:absolute; top:0; left:50%; transform:translateX(-50%); width:1.05rem; height:1.05rem;
+                            border-radius:50%; background:#fff; border:3px solid {LINE}; }}
+      .stepper div.done span {{ border-color:{GREEN}; background:{GREEN}; }}
+      .stepper div.now span {{ border-color:{ACCENT}; }}
+      .stepper div b {{ display:block; color:{INK}; font-weight:600; }}
+      .eyebrow {{ font-size:.78rem; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:{MUTED}; margin:.2rem 0 .3rem; }}
+      .brand {{ font-weight:300; font-size:1.35rem; color:#fff; letter-spacing:-.01em; line-height:1.1; }}
+      .brand b {{ font-weight:700; }} .brand i {{ font-style:normal; color:{GREEN}; }}
+      .brand-sub {{ color:#a6a6a6; font-size:.78rem; margin-top:.25rem; }}
       .chip {{ display:inline-flex; align-items:center; gap:.35rem; padding:.1rem .6rem; border-radius:999px;
                font-size:.8rem; font-weight:600; white-space:nowrap; line-height:1.6; color:#fff; }}
-      .chip.out {{ background:#fff; border:1px solid {LINE}; color:{INK}; font-weight:500; }}
+      .chip.out {{ background:#fff; border:1px solid {LINE}; color:{INK}; font-weight:600; }}
       .dot {{ display:inline-block; width:.6rem; height:.6rem; border-radius:50%; }}
       .ej {{ font-size:.72rem; color:{MUTED}; border:1px dashed #a3abb8; border-radius:4px; padding:0 .35rem;
              margin-left:.4rem; font-weight:500; vertical-align:middle; }}
       .step {{ display:flex; gap:.75rem; align-items:flex-start; margin:.1rem 0 .4rem; }}
-      .step .n {{ flex:0 0 1.7rem; height:1.7rem; border-radius:50%; background:#e3e9fb; color:{ACCENT};
+      .step .n {{ flex:0 0 1.7rem; height:1.7rem; border-radius:50%; background:{GREEN_WASH}; color:{GREEN_DARK};
                   font-weight:600; display:flex; align-items:center; justify-content:center; font-size:.9rem; }}
       .step .t {{ font-weight:600; font-size:1.02rem; line-height:1.3; }}
       .step .s {{ color:{MUTED}; font-size:.86rem; line-height:1.35; }}
       .q {{ display:grid; grid-template-columns:.9rem 1fr; gap:.15rem .55rem; padding:.45rem .6rem;
-            border-radius:.45rem; background:#f3f5f8; margin-bottom:.35rem; }}
+            border-radius:.45rem; background:{SOFT}; margin-bottom:.35rem; }}
       .q .d {{ width:.55rem; height:.55rem; border-radius:50%; margin-top:.42rem; }}
       .q .h {{ font-weight:500; }} .q .r {{ grid-column:2; font-size:.88rem; }}
       .q .p {{ grid-column:2; font-family:'IBM Plex Mono',monospace; font-size:.72rem; color:{MUTED}; }}
@@ -122,16 +156,16 @@ def inject_css() -> None:
       .flow div {{ background:#fff; border:1px solid {LINE}; border-radius:.6rem; padding:.8rem .9rem; }}
       .flow b {{ display:block; font-size:.98rem; margin-bottom:.2rem; }}
       .flow span {{ color:{MUTED}; font-size:.86rem; line-height:1.35; display:block; }}
-      .flow i {{ font-style:normal; color:{ACCENT}; font-weight:600; font-size:.8rem; letter-spacing:.06em; }}
+      .flow i {{ font-style:normal; color:{GREEN_DARK}; font-weight:600; font-size:.8rem; letter-spacing:.06em; }}
       .big {{ font-size:1.05rem; line-height:1.55; max-width:62rem; }}
-      .kcol {{ background:#eef1f5; border:1px solid {LINE}; border-radius:.6rem; padding:.6rem; min-height:12rem; }}
-      .kcol.human {{ background:#fdf1ef; border:1px dashed #c62f2f; }}
+      .kcol {{ background:{SOFT}; border:1px solid {LINE}; border-radius:.6rem; padding:.6rem; min-height:12rem; }}
+      .kcol.human {{ background:#fdf0ef; border:1px dashed #da291c; }}
       .kcol .kh {{ margin:0 0 .1rem; font-size:.95rem; font-weight:600; display:flex; justify-content:space-between; }}
       .kcol .kh span:last-child {{ background:#fff; border:1px solid {LINE}; border-radius:999px; padding:0 .5rem; font-size:.8rem; }}
       .kcol .hint {{ color:{MUTED}; font-size:.78rem; margin-bottom:.5rem; }}
       .kcard {{ background:#fff; border:1px solid {LINE}; border-left:4px solid #a7adb7; border-radius:.45rem;
                 padding:.5rem .6rem; margin-bottom:.45rem; font-size:.86rem; }}
-      .kcard.work {{ border-color:{ACCENT}; box-shadow:0 0 0 2px #e3e9fb; }}
+      .kcard.work {{ border-color:{ACCENT}; box-shadow:0 0 0 2px #e7f1f6; }}
       .kcard .kt {{ font-weight:600; line-height:1.3; }}
       .kcard .km {{ color:{MUTED}; font-size:.74rem; }}
       .kcard .kq {{ display:flex; gap:.4rem; font-size:.78rem; margin-top:.2rem; line-height:1.3; }}

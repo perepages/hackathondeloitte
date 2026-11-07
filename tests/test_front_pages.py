@@ -39,6 +39,7 @@ def test_directo_runs_sample_batch():
 
 def test_cola_review_is_saved():
     at = AppTest.from_file(APP, default_timeout=30).run()
+    at.session_state["cola_open"] = "ALR-20261006-011826"  # abre la ficha de una alerta escalada
     at.switch_page("views/cola.py").run()
     at.text_input(key="cola_analyst").input("Ana").run()
     at.button(key="cola_ok").click().run()
@@ -80,3 +81,19 @@ def test_paginas_en_modo_live_sin_alertas(page, monkeypatch):
     at = AppTest.from_file(APP, default_timeout=30).run()
     at.switch_page(page).run()
     assert not at.exception, at.exception
+
+
+def test_cola_bandeja_y_ficha():
+    """La bandeja filtra por gravedad y la ficha se abre, navega y vuelve a la bandeja."""
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    at.switch_page("views/cola.py").run()
+    at.multiselect(key="cola_sev").set_value(["high"]).run()
+    assert not at.exception, at.exception
+    assert any("de 150 alertas" in c.value for c in at.caption)
+    at.session_state["cola_open"] = "ALR-20261006-011826"
+    at.run()
+    at.button(key="cola_next").click().run()
+    assert not at.exception, at.exception
+    at.button(key="cola_back").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["cola_open"] is None

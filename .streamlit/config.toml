@@ -1,23 +1,28 @@
-# Tema común de la app (lo usan todas las páginas; dueño: persona A).
-# Colores de datos (veredicto, severidad) NO van aquí: están en core/ui.py.
+# Tema común (dueño: persona A). Línea visual inspirada en la de Deloitte (reto Deloitte × UAB):
+# negro y blanco, azul petróleo para lo interactivo, verde Deloitte solo como acento, Open Sans.
+# Colores de datos (conclusión, gravedad) NO van aquí: están en core/ui.py.
 
 [client]
 toolbarMode = "minimal"
 
 [theme]
 base = "light"
-primaryColor = "#2346c8"
-backgroundColor = "#f7f8fa"
-secondaryBackgroundColor = "#eef1f5"
-textColor = "#16202e"
-linkColor = "#2346c8"
-borderColor = "#dce1e8"
+primaryColor = "#1076a8"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f5"
+textColor = "#000000"
+linkColor = "#1076a8"
+borderColor = "#e3e3e3"
 showWidgetBorder = true
 baseRadius = "0.5rem"
-font = "IBM Plex Sans:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap"
-headingFont = "IBM Plex Sans Condensed:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap"
+font = "Open Sans:https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap"
+headingFont = "Open Sans:https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap"
 codeFont = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
-headingFontWeights = [600, 600, 600]
+headingFontWeights = [300, 400, 600]
 
 [theme.sidebar]
-backgroundColor = "#eef1f5"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#1a1a1a"
+textColor = "#ffffff"
+borderColor = "#333333"
+primaryColor = "#86bc25"
