@@ -75,3 +75,5 @@ class TriagePreview(BaseModel):
     summary: str = ""
     decision_source: Literal["llm", "rules"] | None = None
     decision_notes: list[str] = Field(default_factory=list)  # correcciones de la política sobre la propuesta
+    rule_applied: str = ""  # regla que decidió, si fueron las reglas (p. ej. «RB-01 simulacro»)
+    second_opinion: dict[str, Any] | None = None  # si decidió la IA: qué opinan las reglas (verdict, rule, justification)

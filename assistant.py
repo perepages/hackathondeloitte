@@ -84,6 +84,25 @@ def available() -> tuple[bool, str]:
     return False, "No hay ningún LLM configurado (ver .env.example)."
 
 
+def _changes_checked(result: dict) -> list[dict]:
+    changes = [c for c in (result.get("contexts") or []) if c.get("kind") == "change"]
+    if not changes or not isinstance(result.get("alert"), dict):
+        return []
+    try:
+        import rules
+        covering = rules.authorized_change(result)
+    except Exception:
+        covering = None
+    out = []
+    for c in changes:
+        d = c.get("data") or {}
+        out.append({"id": d.get("id"), "titulo": d.get("titulo"),
+                    "ventana": f"{d.get('inicio')} – {d.get('fin')} (hora de España; las alertas van en UTC)",
+                    "detalle": d.get("detalle"),
+                    "cubre_esta_alerta": bool(covering) and covering.get("id") == d.get("id")})
+    return out
+
+
 def build_context(result: dict) -> dict:
     """Lo relevante de un resultado de triaje (TriagePreview del back o vista del front), recortado."""
     alert = result.get("alert") or {}
@@ -95,7 +114,9 @@ def build_context(result: dict) -> dict:
         "veredicto": result.get("verdict"),
         "preguntas_abiertas": result.get("open_questions") or [],
         "contexto": [{"tipo": c.get("kind"), "clave": c.get("key"), "datos": c.get("data")}
-                     for c in (result.get("contexts") or [])],
+                     for c in (result.get("contexts") or []) if c.get("kind") != "change"],
+        # Los cambios, ya comprobados (ventana horaria e IPs de origen): un cambio que no cubre la alerta no la autoriza
+        "cambios_aprobados": _changes_checked(result),
         "registros_relacionados": (result.get("related_logs") or [])[:5],
     }
     return ctx
@@ -154,6 +175,8 @@ DECISION_PROMPT = (
     "«Sin datos en inteligencia» no significa limpio, pero tampoco basta para llamarlo ataque: hacen falta "
     "indicios concretos. Un intento bloqueado por un control sin actividad posterior es true_positive con "
     "severity_adjustment -1; ejecución o acceso confirmados (no una simple resolución DNS o conexión), +1.\n"
+    "Un cambio aprobado solo autoriza la actividad si en «cambios_aprobados» tiene cubre_esta_alerta=true (el "
+    "sistema ya ha comprobado la ventana horaria y las IPs de origen); si es false, no lo uses como justificación.\n"
     "Criterios del SOC: un subdominio aleatorio de un CDN o cloud legítimo (amazonaws.com, cloudfront.net, "
     "azureedge.net, akamaized.net, blob.core.windows.net, googleapis.com…) es un patrón normal → false_positive, "
     "salvo inteligencia maliciosa. En las alertas del asistente de compra (UC-AI-001) muchas frases normales de "

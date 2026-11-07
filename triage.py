@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import re
 
 import soc_api
-from policy import CRITICALITY_ORDER, apply_severity_adjustment, base_severity
+from policy import CRITICALITY_ORDER, apply_severity_adjustment, base_severity, cloud_asset, service_assets
 from schemas import Alert, ContextRecord, QueryRecord, TriagePreview
 
 
@@ -121,15 +121,16 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
 
     entities = alert.entities
     assets: list[dict] = []
-    for host in _items(entities.get("hosts"))[:5]:
-        hostname = _first(host, "hostname", "host", "ip")
-        ip = _first(host, "ip")
-        if not hostname:
-            continue
+    asset_origin: dict[str, str] = {}  # hostname -> por qué cuenta como activo afectado
+
+    def add_asset(hostname: str, ip: str | None = None, origin: str = "equipo de la alerta") -> None:
+        if hostname in asset_origin:
+            return
         asset = fetch(f"/assets/{hostname}", {}, hostname, lambda h=hostname: soc_api.get_asset(h))
         if asset is None and ip and ip != hostname:
             asset = fetch(f"/assets/{ip}", {}, ip, lambda address=ip: soc_api.get_asset(address))
         if isinstance(asset, dict):
+            asset_origin[hostname] = origin
             assets.append(asset)
             contexts.append(ContextRecord(kind="asset", key=hostname, data=asset))
             changes = fetch(
@@ -144,6 +145,11 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
                     for change in changes[:10]
                 )
 
+    for host in _items(entities.get("hosts"))[:5]:
+        hostname = _first(host, "hostname", "host", "ip")
+        if hostname:
+            add_asset(hostname, _first(host, "ip"))
+
     users: list[dict] = []
     for user in _items(entities.get("users"))[:5]:
         key = _first(user, "upn", "username", "user")
@@ -153,6 +159,30 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
         if isinstance(result, dict):
             users.append(result)
             contexts.append(ContextRecord(kind="user", key=key, data=result))
+
+    # Cambios que la propia alerta cita (p. ej. evidence.change_ticket = CHG-2026-1078)
+    cited = re.findall(r"CHG-\d{4}-\d+", f"{alert.description} {alert.evidence}")
+    known = {c.data.get("id") for c in contexts if c.kind == "change"}
+    for change_id in dict.fromkeys(cited):
+        if change_id in known:
+            continue
+        found = fetch("/changes", {"q": change_id}, change_id, lambda q=change_id: soc_api.search_changes(q))
+        for change in found if isinstance(found, list) else []:
+            if change.get("id") == change_id:
+                contexts.append(ContextRecord(kind="change", key=change_id, data=change))
+
+    # Activo afectado cuando la alerta no trae un equipo: el puesto del usuario, el servicio atacado o el bucket
+    if not assets:
+        for user in users:
+            if user.get("workstation"):
+                add_asset(str(user["workstation"]), origin=f"puesto de trabajo de {user.get('upn')}")
+        for hostname, origin in service_assets(alert.model_dump()):
+            add_asset(hostname, origin=origin)
+        cloud = cloud_asset(alert.model_dump())
+        if cloud:
+            asset_origin[cloud["hostname"]] = cloud["_origen"]
+            assets.append(cloud)
+            contexts.append(ContextRecord(kind="asset", key=cloud["hostname"], data=cloud))
 
     indicators: list[tuple[str, str]] = []
     for kind in ("ips", "domains"):
@@ -228,21 +258,25 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
             key=lambda asset: _criticality_rank(str(asset.get("criticality", ""))),
         )
         criticality = str(most_critical_asset.get("criticality", ""))
+        hostname = str(most_critical_asset.get("hostname", "desconocido"))
         if _criticality_rank(criticality) >= 0:
             severity = base_severity(alert.severity, criticality)
+            origin = asset_origin.get(hostname)
             rationale = (
-                f"Matriz SOC: regla {alert.severity} x criticidad {criticality} "
-                f"del activo {most_critical_asset.get('hostname', 'desconocido')}."
+                f"Matriz SOC: regla {alert.severity.lower()} × criticidad {criticality} del activo {hostname}"
+                + (f" ({origin})" if origin and origin != "equipo de la alerta" else "")
+                + f" = {severity}."
             )
         else:
-            severity = alert.severity.lower()
-            rationale = "Provisional: la CMDB no devolvió una criticidad reconocida; matriz no calculada."
+            severity = base_severity(alert.severity, "Media")
+            rationale = (f"Matriz SOC: la CMDB no da una criticidad reconocida para {hostname}; se asume Media: "
+                         f"regla {alert.severity.lower()} × Media = {severity}.")
             open_questions.append("Confirmar la criticidad del activo antes de cerrar la severidad final.")
     else:
-        severity = alert.severity.lower()
+        severity = base_severity(alert.severity, "Media")
         rationale = (
-            f"Provisional: se conserva la severidad de regla ({alert.severity}) porque no se obtuvo "
-            "la criticidad de un activo; no es una severidad final de política."
+            f"Matriz SOC: no se identificó ningún activo afectado en la CMDB; se asume criticidad Media: "
+            f"regla {alert.severity.lower()} × Media = {severity}."
         )
         open_questions.append("Determinar la criticidad del activo o identidad afectada.")
 

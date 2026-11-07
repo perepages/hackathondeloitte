@@ -30,6 +30,8 @@ CONTRATO DEL FRONT (lo que devuelve to_view):
   queries   [{method, path, params, status (ok|not_found|error), result_count, note, summary}]
   contexts  [{kind, key, data}]   related_logs [dict]   (del back)
   decision_source  llm | rules | None      decision_notes  [correcciones de la política a la propuesta]
+  rule_applied     regla que decidió (si decision_source == rules), p. ej. «RB-01 simulacro»
+  second_opinion   {verdict, rule, justification} de las reglas cuando decidió la IA, o None
   example_fields  [nombres de campos que vienen de `_ejemplo`]
   review          {decision, analyst, note, at} o None   (decisión de la persona, de core/store)
 """
@@ -119,6 +121,8 @@ def to_view(preview: dict) -> dict:
 
     view["decision_source"] = preview.get("decision_source")  # llm | rules | None (back sin propuesta)
     view["decision_notes"] = preview.get("decision_notes") or []
+    view["rule_applied"] = preview.get("rule_applied") or ""
+    view["second_opinion"] = preview.get("second_opinion")
     decided = view["decision_source"] is not None
     for f in EXAMPLE_FIELDS:
         back_value = preview.get(f, view.get(f))

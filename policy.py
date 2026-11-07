@@ -32,6 +32,55 @@ def base_severity(rule_severity: str, asset_criticality: str) -> str:
     return _MATRIX[rule][column]
 
 
+# Activo afectado cuando la alerta no nombra un equipo (02_inventario/servicios_negocio.csv y activos.csv).
+# La matriz se cruza con «el activo o identidad más crítica afectada»: para una alerta contra la tienda online, el
+# activo es la tienda aunque la alerta solo traiga la IP del atacante.
+SERVICE_ASSET_BY_PRODUCT = {
+    "WAF": ("WEB-ECOM01", "frontal de la tienda online (servicio «Tienda online y app»)"),
+    "ECOM": ("WEB-ECOM01", "frontal de la tienda online (servicio «Tienda online y app»)"),
+    "AI_GATEWAY": ("AI-ASSIST01", "backend del asistente de compra «Vela»"),
+}
+STORE_DOMAINS = ("tarvia.example",)
+# Buckets y servicios sin ficha en la CMDB, con la criticidad de servicios_negocio.csv
+SERVICE_CRITICALITY = {
+    "tarvia-backups-prod": ("Alta", "Copias de seguridad"),
+}
+
+
+def service_assets(alert: dict) -> list[tuple[str, str]]:
+    """(hostname de la CMDB, por qué es el activo afectado) para alertas que no nombran un equipo."""
+    out = []
+    product = str(alert.get("source_product", "")).upper()
+    if product in SERVICE_ASSET_BY_PRODUCT:
+        out.append(SERVICE_ASSET_BY_PRODUCT[product])
+    entities = alert.get("entities") or {}
+    for url in entities.get("urls") or []:
+        host = str(url).split("://", 1)[-1].split("/", 1)[0].lower()
+        if any(host == d or host.endswith("." + d) for d in STORE_DOMAINS):
+            out.append(SERVICE_ASSET_BY_PRODUCT["WAF"])
+    if entities.get("customers") and product not in SERVICE_ASSET_BY_PRODUCT:
+        out.append(SERVICE_ASSET_BY_PRODUCT["ECOM"])
+    return list(dict.fromkeys(out))
+
+
+def cloud_asset(alert: dict) -> dict | None:
+    """Ficha de un recurso cloud: criticidad declarada en la alerta o, si no, la del servicio de negocio."""
+    cloud = (alert.get("entities") or {}).get("cloud") or {}
+    bucket = cloud.get("bucket") if isinstance(cloud, dict) else None
+    if not bucket:
+        return None
+    declared = str((alert.get("evidence") or {}).get("bucket_classification", ""))
+    for level in ("Crítica", "Alta", "Media", "Baja"):
+        if _normalize(declared).startswith(_normalize(level)):
+            return {"hostname": bucket, "criticality": level, "business_service": declared,
+                    "zone": "cloud", "_origen": "clasificación del bucket en la alerta"}
+    if bucket in SERVICE_CRITICALITY:
+        level, service = SERVICE_CRITICALITY[bucket]
+        return {"hostname": bucket, "criticality": level, "business_service": service,
+                "zone": "cloud", "_origen": "servicios_negocio.csv"}
+    return None
+
+
 def apply_severity_adjustment(severity: str, adjustment: int) -> str:
     """Apply at most one policy adjustment (+1, -1, or 0), clamped to bounds."""
     normalized = _normalize(severity)

@@ -118,14 +118,21 @@ La API de Deloitte se arranca desde `../DTT-UAB-The-Hack/06_herramientas` con
 
 ## 7. Paso exacto siguiente
 
-**Hecho (7 nov):** el back devuelve veredicto, confianza, justificación, decisión, acciones, intentos de engaño,
-título y resumen (`verdict.py`, `schemas.py`, `assistant.decide_json`). Muestra regenerada con el LLM en las 150
-alertas: **87 % mismo veredicto y 92 % misma decisión que las reglas**; las discrepancias se revisaron a mano (el
-LLM acierta en las 12 reglas sin lógica N1: fatiga MFA, robo de cuenta, túnel DNS, descarga de S3…). Se corrigió el
-prompt para los subdominios de CDN legítimos y los prompts inocentes de clientes. Las pantallas ya no marcan esos
-campos como «dato de ejemplo». Pendiente de commit.
+**Hecho (7 nov, noche): back de Marc integrado y gravedad corregida.**
+- `rules.py`: motor de reglas = runbooks RB-01…RB-10 de Marc (rama `pozobranch`), en castellano y con sus errores
+  corregidos (TIP «known-good» tomado como malicioso, cambios aprobados sin mirar fecha, pentest por fecha y no por
+  IP, simulacro/SCCM con una palabra suelta, viaje de RRHH sin fechas, ATO por subcadena, frases cortas al asistente)
+  + nuestras reglas por caso de uso + regla nueva RB-03 de VPN de proveedor. Es el respaldo si falla la IA y, si no,
+  una **segunda opinión** visible en la ficha (`second_opinion`).
+- Gravedad (§2): se busca siempre el activo afectado (puesto del usuario, frontal de la tienda, asistente Vela,
+  bucket); antes solo 51/150 alertas tenían activo, ahora 145/150. La matriz está comprobada celda a celda contra
+  `politica_soc.md` (test). El calendario de cambios está en **hora de España** (UTC+2/UTC+1) y se convierte a UTC.
+- Política encima de la IA: −1 si un control lo bloqueó; +1 si un runbook confirma acceso o ejecución; gravedad
+  baja o informativa no se escala salvo criterio obligatorio §5; a la IA solo se le marcan como autorizados los
+  cambios que cubren de verdad la alerta.
+- Resultado con las 150 alertas: IA y reglas coinciden en 136/150 veredictos; 22 escaladas, todas graves o
+  obligatorias; 0 incoherencias (escalada informativa o ataque grave cerrado). 64 tests en verde.
+- No se ha juntado la rama `pozobranch` con git: su `app.py` es la app antigua y sus campos no encajaban con el front.
 
-**Siguiente: que el back genere `incident_id`** (política §6, agrupación): en `verdict.py` o un módulo nuevo,
-agrupar las alertas que comparten equipo, usuario o indicador (remitente, dominio, IP) en una ventana de tiempo,
-y que `build_fixture.py` y el modo en vivo lo rellenen. Así desaparece el último «dato de ejemplo» y la pantalla de
-Incidentes deja de tener uno solo.
+**Siguiente: agrupar alertas en incidentes (`incident_id`, política §6).** Ejemplo claro en la muestra: los tres
+accesos VPN de Logisoft (11, 18 y 25 de octubre, domingos de madrugada desde el mismo ASN) son un mismo incidente.

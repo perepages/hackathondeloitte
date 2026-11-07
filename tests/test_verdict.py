@@ -98,3 +98,29 @@ def test_objetivos_con_texto_se_separan_en_valores_exactos():
 
 def test_parse_json_tolera_texto_alrededor():
     assert assistant.parse_json_object('```json\n{"verdict": "false_positive"}\n```') == {"verdict": "false_positive"}
+
+
+def test_gravedad_baja_no_se_escala_salvo_criterio_obligatorio(monkeypatch):
+    _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.8, "decision": "escalate"})
+    out = _decide(_preview(rule_id="UC-WEB-001"), matrix="low")
+    assert out.decision == "close" and any("§3" in n for n in out.decision_notes)
+    # fraude (robo de cuenta de cliente): las reglas lo marcan como escalado obligatorio y se respeta
+    ato = _decide(_preview(rule_id="UC-WEB-003", entities={"ips": ["198.51.100.1"]}), matrix="low")
+    assert ato.decision == "escalate"
+
+
+def test_la_ia_solo_ve_como_autorizados_los_cambios_que_cubren_la_alerta():
+    change = {"kind": "change", "key": "WEB-ECOM01", "data": {
+        "id": "CHG-1", "titulo": "Pentest", "inicio": "2026-10-08 08:00", "fin": "2026-10-10 18:00",
+        "detalle": "IPs origen 192.0.2.10-12"}}
+    result = {"alert": {"alert_id": "A", "created_at": "2026-10-09T10:00:00Z", "entities": {"ips": ["203.0.113.9"]}},
+              "contexts": [change]}
+    ctx = assistant.build_context(result)
+    assert ctx["cambios_aprobados"][0]["cubre_esta_alerta"] is False
+    assert all(c["tipo"] != "change" for c in ctx["contexto"])
+
+
+def test_bloqueado_por_un_control_aplica_menos_uno_aunque_la_ia_no_lo_haga(monkeypatch):
+    _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.8, "decision": "escalate", "severity_adjustment": 0})
+    out = _decide(_preview(rule_id="UC-WEB-001", evidence={"action": "blocked", "hits": 22}), matrix="medium")
+    assert out.severity == "low" and out.decision == "close"

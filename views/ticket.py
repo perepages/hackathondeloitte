@@ -38,7 +38,11 @@ def build_ticket(r: dict) -> dict:
         "evidence": [{"source": e.get("_source", ""), "event_id": e.get("event_id", ""),
                       "finding": e.get("event_type") or e.get("action") or ""} for e in r["related_logs"]],
         "enrichment": [{"indicator": q["path"].rsplit("/", 1)[-1], "type": "intel", "source": "TIP + GeoIP",
-                        "result": q["summary"]} for q in r["queries"] if q["path"].startswith("/intel/")],
+                        "result": q["summary"]} for q in r["queries"] if q["path"].startswith("/intel/")]
+                      + [{"indicator": c["key"], "type": "sha256", "source": "Sandbox",
+                          "result": f"veredicto {c['data'].get('verdict', '?')}, puntuación {c['data'].get('score', '?')}"
+                                    + (f", familia {c['data']['family']}" if c["data"].get("family") else "")}
+                         for c in ctx if c["kind"] == "sandbox"],
         "mitre": [m] if (m := (r["alert"].get("mitre") or {}).get("technique_id")) else [],
         "recommended_actions": r["recommended_actions"],
         "executed_actions": [],

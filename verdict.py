@@ -2,8 +2,8 @@
 
 Tres capas, en este orden:
   1. Propuesta del LLM (assistant.decide_json), con los datos marcados como <datos_no_fiables>.
-  2. Red de seguridad: si no hay LLM, falla o devuelve algo inválido, las reglas deterministas de
-     scripts/nivel1_triage.py (las mismas que antes salían como «dato de ejemplo»).
+  2. Red de seguridad: si no hay LLM, falla o devuelve algo inválido, el motor de reglas (rules.py: runbooks de
+     Marc corregidos + reglas por caso de uso). Con el LLM, las reglas quedan como segunda opinión visible.
   3. Política SOC encima, SIEMPRE (la propuesta nunca la salta):
      - texto dirigido a nuestro clasificador (inyección) → true_positive y escalar;
      - gravedad = matriz ± 1 como máximo (VIP/privilegiado, ejecución, bloqueado…); actividad autorizada o
@@ -18,7 +18,6 @@ from __future__ import annotations
 import os
 import re
 
-import soc_api
 from policy import SEVERITY_ORDER, apply_severity_adjustment
 from schemas import InjectionFlag, RecommendedAction, TriagePreview
 
@@ -53,37 +52,17 @@ def injection_flags(alert: dict) -> list[dict]:
 
 # ----------------------------------------------------------------------------- reglas (red de seguridad)
 
-def _rules_module():
-    from scripts import nivel1_triage as reglas
-    reglas.API = soc_api.BASE_URL  # por si alguna regla consulta la API (p. ej. cambios de SCCM)
-    return reglas
-
-
-def _rules_context(preview: dict) -> dict:
-    contexts = preview.get("contexts") or []
-    return {
-        "assets": [c["data"] for c in contexts if c["kind"] == "asset"],
-        "users": [c["data"] for c in contexts if c["kind"] == "user"],
-        "intel": {c["key"]: c["data"] for c in contexts if c["kind"] == "intel"},
-        "notes": [],
-    }
+def blocked_by_control(alert: dict) -> bool:
+    """Política §2, −1: un control lo bloqueó antes de producir efecto (WAF blocked, AV quarantined sin ejecución)."""
+    ev = alert.get("evidence") or {}
+    action = str(ev.get("action", "")).strip().lower()
+    return action in ("blocked", "quarantined", "denied", "dropped") and str(ev.get("executed", "")).lower() != "true"
 
 
 def rules_proposal(preview: dict) -> dict:
-    """Propuesta de las reglas deterministas, con la misma forma que la del LLM."""
-    reglas = _rules_module()
-    alert = preview["alert"]
-    ctx = _rules_context(preview)
-    bad = reglas.bad_intel(ctx)
-    rule = reglas.RULES.get(alert.get("rule_id"), reglas.r_default)
-    try:
-        verdict, confidence, why, bump = rule(alert, ctx, bad)
-    except Exception as exc:  # una regla que no sabe leer esta alerta no debe tumbar el triaje
-        verdict, confidence, why, bump = reglas.r_default(alert, ctx, bad)
-        why += f" (La regla específica falló: {exc}.)"
-    return {"verdict": verdict, "confidence": confidence, "severity_adjustment": bump, "decision": None,
-            "title": f"{alert.get('rule_name')}: {why.split('.')[0][:90]}", "summary": why,
-            "justification": why, "recommended_actions": None, "injection_detected": False}
+    """Propuesta del motor de reglas (rules.py: runbooks de Marc corregidos + reglas por caso de uso)."""
+    import rules
+    return rules.evaluate(preview)
 
 
 def default_actions(alert: dict, verdict: str, escalate: bool) -> list[dict]:
@@ -228,8 +207,17 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
             proposal, source = llm_proposal(data), "llm"
         except Exception as exc:  # sin LLM o respuesta inválida: reglas
             notes.append(f"La IA no dio una propuesta válida ({str(exc)[:120]}); se usan las reglas.")
+    try:  # las reglas siempre opinan: respaldo si falla la IA y, si no, segunda opinión visible en pantalla
+        rules_view = rules_proposal(data)
+    except Exception as exc:
+        rules_view = None
+        notes.append(f"Las reglas no pudieron evaluar la alerta ({str(exc)[:120]}).")
     if proposal is None:
-        proposal = rules_proposal(data)
+        if rules_view is None:
+            rules_view = {"verdict": "needs_more_info", "confidence": 0.3, "severity_adjustment": 0, "decision": None,
+                          "title": "", "summary": "", "justification": "Ni la IA ni las reglas pudieron evaluar la alerta.",
+                          "recommended_actions": None, "injection_detected": False, "rule": ""}
+        proposal = rules_view
 
     verdict = proposal["verdict"]
     decision = proposal["decision"]
@@ -245,6 +233,16 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
         notes.append("La IA cree que los datos intentan manipularla; revisar el texto de la alerta.")
 
     adjustment = proposal.get("severity_adjustment") or 0
+    if verdict == "true_positive" and blocked_by_control(alert) and adjustment >= 0:
+        if adjustment > 0:
+            notes.append("La propuesta subía la gravedad, pero la evidencia dice que un control lo bloqueó sin "
+                         "ejecución: se aplica −1 (política SOC §2).")
+        adjustment = -1
+    if (rules_view and rules_view.get("verdict") == verdict == "true_positive"
+            and str(rules_view.get("rule", "")).startswith("RB-")  # solo hechos comprobados por un runbook
+            and (rules_view.get("severity_adjustment") or 0) > 0 and adjustment <= 0):
+        # hecho objetivo que las reglas han comprobado (ejecución o acceso confirmado): +1 de la política §2
+        adjustment = 1
     if flags:  # quien intenta engañar al clasificador no rebaja la gravedad
         adjustment = max(0, adjustment)
     severity, rationale = _severity(verdict, matrix_severity, matrix_rationale, privileged_identity, adjustment)
@@ -260,9 +258,12 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
         if decision == "close":
             notes.append(f"Se escala aunque la propuesta era cerrar: {forced} (política SOC §5).")
         decision = "escalate"
-    elif verdict == "true_positive" and severity == "informational" and decision == "escalate":
-        notes.append("Se cierra aunque la propuesta era escalar: gravedad informativa (p. ej. bloqueado sin efecto); "
-                     "la política la deja para la revisión en lote diaria (§3).")
+    elif (severity in ("informational", "low") and decision == "escalate" and source == "llm"
+          and (rules_view or {}).get("decision") != "escalate"):
+        # §3: gravedad baja o informativa no se escala; los casos obligatorios del §5 (fraude, credenciales,
+        # ejecución) los marcan las reglas con decision=escalate y entonces se respeta
+        notes.append(f"Se cierra aunque la IA proponía escalar: gravedad {severity} y ningún criterio de escalado "
+                     "obligatorio (política SOC §3 y §5).")
         decision = "close"
     elif decision is None:
         decision = "close"
@@ -289,5 +290,9 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
         "summary": proposal["summary"] or justification,
         "decision_source": source,
         "decision_notes": notes,
+        "rule_applied": (rules_view or {}).get("rule", "") if source == "rules" else "",
+        "second_opinion": ({"verdict": rules_view["verdict"], "rule": rules_view.get("rule", ""),
+                            "justification": rules_view["justification"]}
+                           if source == "llm" and rules_view else None),
         "open_questions": list(dict.fromkeys(open_questions)),
     })

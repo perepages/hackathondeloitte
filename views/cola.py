@@ -170,10 +170,18 @@ def render_detail(r: dict, scroll: bool) -> None:
                 c2.progress(float(r["confidence"]), text=f"Seguridad de la conclusión: {round(r['confidence'] * 100)} %")
             st.markdown(f"> {ui.md(r['justification'] or 'El motor todavía no da una justificación.')}")
             source = {"llm": "Propuesta de la IA, revisada con las reglas de la política del SOC.",
-                      "rules": "Propuesta de las reglas automáticas (la IA no estaba disponible o no respondió bien)."
+                      "rules": "Propuesta de las reglas automáticas (la IA no estaba disponible o no respondió bien)"
+                      + (f" · regla: {r['rule_applied']}." if r.get("rule_applied") else ".")
                       }.get(r.get("decision_source"))
             if source:
                 st.caption(source)
+            if (so := r.get("second_opinion")) and so.get("verdict"):
+                label = ui.VERDICT_LABEL.get(so["verdict"], so["verdict"])
+                if so["verdict"] == r["verdict"]:
+                    st.caption(f"✔ Las reglas llegan a la misma conclusión ({ui.md(so.get('rule', ''))}).")
+                else:
+                    st.caption(f"↔ Las reglas opinan otra cosa: **{label}** ({ui.md(so.get('rule', ''))}). "
+                               f"{ui.md(so.get('justification', ''))}")
             for note in r.get("decision_notes") or []:
                 st.caption(f"⚖️ {ui.md(note)}")
             if r["open_questions"]:
