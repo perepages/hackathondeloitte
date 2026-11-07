@@ -16,7 +16,8 @@ import streamlit as st
 from core import data, ui
 
 DUAL_USE = ("mega.nz", "anydesk", "teamviewer")
-STATUS_LABEL = {"propuesta": "🟡 Pendent", "aprobada": "🔵 Aprovada", "ejecutada": "🟢 Feta"}
+STATUS_LABEL = {"propuesta": ":orange-badge[Pendent]", "aprobada": ":blue-badge[Aprovada]",
+                "ejecutada": ":green-badge[Feta]"}
 
 st.title("Accions de resposta")
 st.markdown('<p class="muted">Quan una alerta és un atac real, el sistema proposa com aturar-lo: aïllar un equip, '
@@ -136,7 +137,7 @@ open_id = st.session_state.get("contencion_sel") or st.session_state.get("select
 ui.eyebrow(f"{len(rows)} alertes escalades amb accions proposades · obre'n una per veure-les")
 for r in rows:
     entity = ui.main_entity(r).replace("@", "@​")  # que el correu no es converteixi en enllaç
-    label = (f"{ui.SEVERITY_DOT.get(r['severity'], '⚪')} **{ui.SEVERITY_LABEL[r['severity']].capitalize()}** · "
+    label = (f"{ui.severity_md(r['severity'])} · "
              f"{ui.md(r['rule_name'])}"
              + (f" · {ui.md(entity)}" if entity else "")
              + f" · {ui.fmt_time(r['created_at'])[5:16]} · _{pending_line(r)}_")

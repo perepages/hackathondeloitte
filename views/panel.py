@@ -178,7 +178,7 @@ def sla_table():
             "ID": r["alert_id"],
             "Regla": r["rule_name"],
             "Gravetat": ui.SEVERITY_LABEL.get(sev, sev),
-            "Revisada": "✅ " + (review["analyst"] if review else "") if review else "⏳ Pendent",
+            "Revisada": f"Per {review['analyst']}" if review else "Pendent",
             "Límit SLA": f"{limit_min} min",
             "Queda": (f"{remaining:.0f} min" if remaining >= 0 else f"vençuda fa {-remaining:.0f} min")
                      if not review else "—",
@@ -188,7 +188,7 @@ def sla_table():
     df_sla = pd.DataFrame(filas)
     vencidas = df_sla["_vencida"].sum()
     if vencidas:
-        st.warning(f"{vencidas} alerta(es) han superat el termini sense que ningú les revisi.", icon="⚠️")
+        st.warning(f"{vencidas} alerta(es) han superat el termini sense que ningú les revisi.")
     df_show = df_sla.drop(columns=["_vencida"])
 
     def _color_row(row):

@@ -93,7 +93,7 @@ def render_list() -> bool:
     st.session_state["cola_filtered"] = [r["alert_id"] for r in filt]
 
     # Selección de una sola alerta: se hace clic en cualquier celda de la fila (sin casillas cuadradas) y la
-    # primera columna muestra un círculo, ◉ la abierta y ○ el resto, como una elección única.
+    # primera columna muestra un botón de opción (radio) dibujado: marcado en la abierta, vacío en el resto.
     changed = False
     cells = (((st.session_state.get("cola_tabla") or {}).get("selection") or {}).get("cells")) or []
     if cells and repr(cells[0]) != st.session_state.get("cola_last_cell"):  # un clic nuevo, no el de antes
@@ -108,10 +108,10 @@ def render_list() -> bool:
     open_now = st.session_state.get("cola_open")
 
     df = pd.DataFrame([{
-        " ": "◉" if r["alert_id"] == open_now else "○",
+        " ": ui.RADIO_ON if r["alert_id"] == open_now else ui.RADIO_OFF,
         "Gravetat": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
-        "Estat": ("⏳ Espera una persona" if r["decision"] == "escalate" else "Tancada pel sistema")
-                 if not r["review"] else f"✓ Revisada per {r['review']['analyst']}",
+        "Estat": ("Espera una persona" if r["decision"] == "escalate" else "Tancada pel sistema")
+                 if not r["review"] else f"Revisada per {r['review']['analyst']}",
         "Què ha detectat": r["rule_name"],
         "Conclusió": ui.VERDICT_LABEL[r["verdict"]],
         "Origen": r["source_product"],
@@ -120,7 +120,7 @@ def render_list() -> bool:
     st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
                  height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-cell",
                  key="cola_tabla",
-                 column_config={" ": st.column_config.TextColumn(width=36),
+                 column_config={" ": st.column_config.ImageColumn(width=44),
                                 "Gravetat": st.column_config.TextColumn(width="small"),
                                 "Què ha detectat": st.column_config.TextColumn(width="large")})
     st.caption(f"{len(filt)} de {len(rows)} alertes · fes clic en una fila per veure'n la fitxa a sota")
@@ -150,7 +150,7 @@ def render_detail(r: dict, scroll: bool) -> None:
     if r["injection_flags"]:
         st.error("**Intent d'enganyar el sistema.** El contingut d'aquesta alerta inclou instruccions adreçades a "
                  "la classificació automàtica. No s'han obeït: l'alerta es tracta com a més sospitosa, no menys.",
-                 icon="⚠️")
+                 icon=":material/gpp_bad:")
         for f in r["injection_flags"]:
             st.code(f["excerpt"], language=None, wrap_lines=True)
 
@@ -173,7 +173,7 @@ def render_detail(r: dict, scroll: bool) -> None:
             with h:
                 ui.step(2, "Què ha comprovat el sistema",
                         f"{len(r['queries'])} consultes a les fonts de l'empresa, amb el que ha trobat a cadascuna.")
-            replay = b.button("▶ Repetir", key="cola_replay", use_container_width=True,
+            replay = b.button("Repetir", key="cola_replay", icon=":material/replay:", use_container_width=True,
                               help="Torna a mostrar les comprovacions una a una, en l'ordre en què es van fer")
             box = st.empty()
             if replay:
@@ -184,7 +184,7 @@ def render_detail(r: dict, scroll: bool) -> None:
             else:
                 with box.container():
                     ui.query_list(r["queries"])
-            st.caption("🟢 trobat · 🟡 no hi ha dades (que no n'hi hagi no vol dir que sigui segur) · 🔴 error")
+            ui.query_legend()
             if r["related_logs"]:
                 n_logs = len(r["related_logs"])
                 with st.expander("Veure el registre d'activitat relacionat" if n_logs == 1
@@ -211,12 +211,12 @@ def render_detail(r: dict, scroll: bool) -> None:
             if (so := r.get("second_opinion")) and so.get("verdict"):
                 label = ui.VERDICT_LABEL.get(so["verdict"], so["verdict"])
                 if so["verdict"] == r["verdict"]:
-                    st.caption(f"✔ Les regles arriben a la mateixa conclusió ({ui.md(so.get('rule', ''))}).")
+                    st.caption(f"Les regles arriben a la mateixa conclusió ({ui.md(so.get('rule', ''))}).")
                 else:
-                    st.caption(f"↔ Les regles opinen una altra cosa: **{label}** ({ui.md(so.get('rule', ''))}). "
+                    st.caption(f"Les regles opinen una altra cosa: **{label}** ({ui.md(so.get('rule', ''))}). "
                                f"{ui.md(so.get('justification', ''))}")
             for note in r.get("decision_notes") or []:
-                st.caption(f"⚖️ {ui.md(note)}")
+                st.caption(f"Política del SOC: {ui.md(note)}")
             if r["open_questions"]:
                 with st.expander(f"El que no ha pogut comprovar ({len(r['open_questions'])})",
                                  expanded=r["verdict"] == "needs_more_info"):
@@ -259,11 +259,11 @@ def render_detail(r: dict, scroll: bool) -> None:
                 analyst = c1.text_input("El teu nom", key="cola_analyst", placeholder="p. ex. Anna Garcia")
                 note = c2.text_input("Nota (opcional)", key="cola_note", placeholder="per què ho decideixes")
                 b1, b2 = st.columns(2)
-                if b1.button("✓ D'acord", type="primary", help=f"Acceptar la proposta: {ui.DECISION_VERB[r['decision']]}",
+                if b1.button("D'acord", icon=":material/check:", type="primary", help=f"Acceptar la proposta: {ui.DECISION_VERB[r['decision']]}",
                              disabled=not analyst, key="cola_ok", use_container_width=True):
                     store.save_review(r["alert_id"], r["decision"], analyst, note)
                     st.rerun()
-                if b2.button(f"✗ Millor {'tancar' if other == 'close' else 'escalar'}", disabled=not analyst, key="cola_fix",
+                if b2.button(f"Millor {'tancar' if other == 'close' else 'escalar'}", icon=":material/undo:", disabled=not analyst, key="cola_fix",
                              use_container_width=True):
                     store.save_review(r["alert_id"], other, analyst, note)
                     st.rerun()
@@ -273,7 +273,7 @@ def render_detail(r: dict, scroll: bool) -> None:
     # --- plan de acción (ancho completo, debajo de las dos columnas)
     with st.container(border=True):
         llm_ok, llm_info = data.llm_status()
-        ui.step("✦", "Esborrany del pla d'acció",
+        ui.step("IA", "Esborrany del pla d'acció",
                 "Un model de llenguatge resumeix la situació i proposa què cal fer. És una ajuda per decidir, "
                 "no una decisió: es pot equivocar i no executa res.")
         plans = st.session_state.setdefault("cola_plans", {})

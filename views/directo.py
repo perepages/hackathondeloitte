@@ -28,7 +28,7 @@ if up:
 else:
     ids = list(dict.fromkeys(l.strip() for l in pasted.splitlines() if l.strip()))
 if file_skipped:
-    st.warning(f"{len(file_skipped)} alerta(es) del fitxer s'han saltat per algun error.", icon="⚠️")
+    st.warning(f"{len(file_skipped)} alerta(es) del fitxer s'han saltat per algun error.")
     with st.expander("Veure quines línies s'han saltat i per què"):
         st.dataframe([{"Línia": x["line"], "Motiu": x["reason"]} for x in file_skipped], hide_index=True,
                      use_container_width=True)
@@ -44,7 +44,7 @@ elif not ids:
                + (" de la mostra." if data.MODE == "fixture" else " de la cua real de l'API de Deloitte."))
 
 b1, b2 = st.columns([2, 5], vertical_alignment="center")
-go = b1.button(f"▶ Començar amb {len(ids)} alertes", type="primary", key="directo_go", use_container_width=True)
+go = b1.button(f"Començar amb {len(ids)} alertes", icon=":material/play_arrow:", type="primary", key="directo_go", use_container_width=True)
 progress = b2.progress(0.0, text=f"0 de {len(ids)} alertes revisades")
 board = st.empty()
 
@@ -114,8 +114,7 @@ if go:
 
 skipped_all = st.session_state.get("directo_saltades") or []
 if skipped_all:
-    st.warning(f"{len(skipped_all)} alerta(es) s'han saltat per algun error. La resta s'han triat amb normalitat.",
-               icon="⚠️")
+    st.warning(f"{len(skipped_all)} alerta(es) s'han saltat per algun error. La resta s'han triat amb normalitat.")
     with st.expander("Veure quines alertes s'han saltat i per què"):
         st.dataframe(skipped_all, hide_index=True, use_container_width=True)
 

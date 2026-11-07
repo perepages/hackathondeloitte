@@ -80,7 +80,7 @@ st.markdown('<p class="muted">El que rep l\'analista sènior quan s\'escala una 
             unsafe_allow_html=True)
 alert_id = st.selectbox("Alerta", ids, index=ids.index(current), key="ticket_alert",
                         format_func=lambda i: ui.option_label(data.get_result(i)),
-                        help="🔴 crítica · 🟠 alta · 🟡 mitjana · 🔵 baixa · ⚪ informativa")
+                        help="Ordenades de més a menys greu")
 st.session_state["selected_alert"] = alert_id
 r = data.get_result(alert_id)
 t = build_ticket(r)

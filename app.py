@@ -16,7 +16,7 @@ import streamlit as st
 
 from core import data, ui
 
-st.set_page_config(page_title="Tarvia · Triatge d'alertes", page_icon="🛡️", layout="wide")
+st.set_page_config(page_title="Tarvia · Triatge d'alertes", page_icon=":material/shield:", layout="wide")
 ui.inject_css()
 
 DEV = os.getenv("SOC_DEV", "0") == "1"

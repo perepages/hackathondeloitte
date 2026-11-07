@@ -133,7 +133,7 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
     import assistant
 
     st.divider()
-    st.subheader("🤖 Pla d'Acció Recomanat")
+    st.subheader("Pla d'Acció Recomanat")
     llm_ok, llm_info = assistant.available()
     if st.button("Generar resum d'accions", type="primary", use_container_width=True, disabled=not llm_ok):
         try:

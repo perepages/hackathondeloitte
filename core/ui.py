@@ -8,6 +8,7 @@ HTML solo meten texto NUESTRO; el texto externo pasa siempre por md() o esc().
 """
 from __future__ import annotations
 
+import base64
 import html
 import re
 
@@ -24,7 +25,6 @@ VERDICT_ORDER = ["true_positive", "needs_more_info", "benign_true_positive", "fa
 SEVERITY_COLOR = {"critical": "#da291c", "high": "#e0703f", "medium": "#d29a12",
                   "low": "#7f97b2", "informational": "#a7adb7"}
 DECISION_COLOR = {"close": "#53565a", "escalate": "#da291c"}
-QUERY_ICON = {"ok": "🟢", "not_found": "🟡", "error": "🔴"}
 # Interfaz (línea visual tipo Deloitte): negro, grises, azul petróleo interactivo y verde solo de acento
 INK, MUTED, LINE, ACCENT = "#000000", "#666666", "#e3e3e3", "#1076a8"
 GREEN, GREEN_DARK, GREEN_WASH, SOFT = "#86bc25", "#5c8a1a", "#eef7e0", "#f5f5f5"
@@ -106,14 +106,15 @@ def main_entity(view: dict) -> str:
     return ""
 
 
-SEVERITY_DOT = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "informational": "⚪"}
+# Color de cada gravedad para los distintivos de Markdown de Streamlit (:red-badge[...])
+SEVERITY_MD = {"critical": "red", "high": "orange", "medium": "yellow", "low": "blue", "informational": "gray"}
 SEV_RANK = {s: i for i, s in enumerate(["critical", "high", "medium", "low", "informational"])}
 
 
 def option_label(view: dict) -> str:
     """Texto de una alerta en un desplegable: punto de color, gravedad, ID y título."""
     sev = view.get("severity") or "informational"
-    return (f"{SEVERITY_DOT.get(sev, '⚪')} {SEVERITY_LABEL.get(sev, sev).upper()} · "
+    return (f"{SEVERITY_LABEL.get(sev, sev).upper()} · "
             f"{view['alert_id']} · {view['rule_name']}")
 
 
@@ -147,10 +148,36 @@ def alert_cards(views: list[dict], selected: str | None, key: str, extra=None, c
             st.markdown(f"**{md(v['rule_name'])}**  \n<span class='muted'>{ent}"
                         f"{' · ' if main_entity(v) else ''}{esc(fmt_time(v['created_at'])[5:16])}</span>"
                         + (f"  \n{esc(extra(v))}" if extra else ""), unsafe_allow_html=True)
-            if st.button("✓ Seleccionada" if sel else button_label, key=f"{key}_btn_{i}", disabled=sel,
+            if st.button("Seleccionada" if sel else button_label, key=f"{key}_btn_{i}", disabled=sel,
                          type="primary" if not sel else "secondary", use_container_width=True):
                 picked = v["alert_id"]
     return picked
+
+
+def severity_md(s: str) -> str:
+    """Gravedad como distintivo de color en Markdown (para etiquetas de desplegables, donde no hay HTML)."""
+    return f":{SEVERITY_MD.get(s, 'gray')}-badge[{SEVERITY_LABEL.get(s, s).capitalize()}]"
+
+
+def _svg_uri(svg: str) -> str:
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode()
+
+
+# Botón de opción (radio) dibujado, para la primera columna de la bandeja: la tabla de Streamlit es un lienzo y
+# no admite inputs de verdad, pero sí imágenes. Mismo aspecto que un radio nativo: elección única.
+RADIO_OFF = _svg_uri('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">'
+                     '<circle cx="11" cy="11" r="9" fill="#fff" stroke="#8a8f98" stroke-width="2"/></svg>')
+RADIO_ON = _svg_uri('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">'
+                    f'<circle cx="11" cy="11" r="9" fill="#fff" stroke="{ACCENT}" stroke-width="2"/>'
+                    f'<circle cx="11" cy="11" r="5" fill="{ACCENT}"/></svg>')
+
+
+def query_legend() -> None:
+    """Llegenda dels punts de color de les comprovacions (sense emoticones)."""
+    dot = '<span style="display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:{}"></span>'
+    st.markdown(f'<span class="muted" style="font-size:.85rem">{dot.format("#1a8a5f")} trobat &nbsp;·&nbsp; '
+                f'{dot.format("#d29a12")} no hi ha dades (que no n\'hi hagi no vol dir que sigui segur) '
+                f'&nbsp;·&nbsp; {dot.format("#c62f2f")} error</span>', unsafe_allow_html=True)
 
 
 def eyebrow(text: str) -> None:
