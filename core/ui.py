@@ -55,7 +55,11 @@ DECISION_HELP = {"close": "No cal que ningú més hi intervingui.",
                  "escalate": "Passa a un analista sènior (nivell 2) perquè actuï."}
 CRIT_LABEL = ["Baixa", "Mitjana", "Alta", "Crítica"]
 ENTITY_LABEL = {"hosts": "Equip", "users": "Usuari", "ips": "Adreça IP", "domains": "Domini",
-                "urls": "Web", "processes": "Programa", "customers": "Client", "files": "Fitxer", "cloud": "Núvol"}
+                "urls": "Web", "processes": "Programa", "customers": "Client", "files": "Fitxer", "cloud": "Núvol",
+                "ai_session": "Sessió de l'assistent"}
+# Les entitats «cloud» venen com un objecte: cada camp té el seu nom
+CLOUD_LABEL = {"account": "Compte del núvol", "identity": "Identitat del núvol", "bucket": "Bucket",
+               "region": "Regió", "resource": "Recurs", "key_id": "Clau d'accés"}
 ACTION_LABEL = {"purge_email": "Esborrar el correu de totes les bústies", "block_ioc": "Bloquejar l'indicador",
                 "revoke_sessions": "Tancar les sessions obertes", "reset_password": "Forçar el canvi de contrasenya",
                 "isolate_host": "Aïllar l'equip de la xarxa", "disable_user": "Deshabilitar el compte",
@@ -98,8 +102,12 @@ def stepper(r: dict) -> None:
 def main_entity(view: dict) -> str:
     """El equipo, usuario o indicador más representativo de la alerta, para resumirla en una línea."""
     ent = (view.get("alert") or {}).get("entities") or {}
+    cloud = ent.get("cloud") if isinstance(ent.get("cloud"), dict) else {}
     for kind in ("hosts", "users", "domains", "ips", "customers"):
-        for v in ent.get(kind) or []:
+        if kind == "ips" and cloud.get("bucket"):  # en una alerta de núvol, el recurs afectat diu més que l'IP
+            return f"Bucket: {cloud['bucket']}"
+        values = ent.get(kind) or []
+        for v in values if isinstance(values, list) else [values]:
             val = (v.get("hostname") or v.get("upn") or v.get("customer_id")) if isinstance(v, dict) else v
             if val:
                 return f"{ENTITY_LABEL.get(kind, kind)}: {val}"
@@ -387,10 +395,21 @@ def live_column(title: str, hint: str, cards: list[str], human: bool = False,
 
 
 def entities_table(alert: dict) -> pd.DataFrame:
+    """Les entitats de l'alerta, una per fila. Accepta les tres formes del dataset: llistes (hosts, users…),
+    un objecte (cloud: {account, identity, bucket}) i un text sol (ai_session)."""
     rows = []
     for k, vals in (alert.get("entities") or {}).items():
-        for v in vals or []:
-            val = (v.get("hostname") or v.get("upn") or v.get("name") or v.get("customer_id") or str(v)) \
-                if isinstance(v, dict) else str(v)
+        if vals in (None, "", [], {}):
+            continue
+        if isinstance(vals, dict):  # p. ex. cloud
+            rows += [(CLOUD_LABEL.get(sk, f"{ENTITY_LABEL.get(k, k)} ({sk})"), str(sv)) for sk, sv in vals.items() if sv]
+            continue
+        for v in vals if isinstance(vals, list) else [vals]:
+            if isinstance(v, dict):
+                val = v.get("hostname") or v.get("upn") or v.get("name") or v.get("customer_id") or v.get("ip") or str(v)
+                if v.get("role"):
+                    val = f"{val} ({v['role']})"
+            else:
+                val = str(v)
             rows.append((ENTITY_LABEL.get(k, k), val))
     return pd.DataFrame(rows, columns=["Què", "Quin"])

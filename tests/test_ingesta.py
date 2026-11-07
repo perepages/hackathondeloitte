@@ -88,3 +88,16 @@ def test_mode_mostra_avisa_si_l_alerta_no_hi_es(monkeypatch):
     data.run_triage(["ALR-QUE-NO-EXISTEIX"], events.append, pause=0)
     err = [e for e in events if e["type"] == "error"]
     assert err and "mode en directe" in err[0]["message"]
+
+
+def test_taula_d_entitats_amb_les_tres_formes_del_dataset():
+    """Llistes, un objecte (cloud) i un text sol (ai_session): cap valor lletra a lletra ni noms de camps."""
+    from core import ui
+    alert = {"entities": {"cloud": {"account": "tarvia-prod", "bucket": "tarvia-backups-prod"},
+                          "ai_session": "ai-c07inj0001", "ips": ["198.19.95.151"],
+                          "customers": [{"customer_id": "C1", "role": "víctima"}]}}
+    rows = dict(zip(ui.entities_table(alert)["Què"], ui.entities_table(alert)["Quin"]))
+    assert rows["Compte del núvol"] == "tarvia-prod" and rows["Bucket"] == "tarvia-backups-prod"
+    assert rows["Sessió de l'assistent"] == "ai-c07inj0001"
+    assert rows["Client"] == "C1 (víctima)"
+    assert ui.main_entity({"alert": alert}) == "Bucket: tarvia-backups-prod"
