@@ -63,3 +63,16 @@ como «dato de ejemplo». Con `SOC_EXAMPLES=0` se ve solo lo que da el back.
 
 **Ramas:** persona A trabaja en `front-a`, persona B en `front-b`; ambas salen de `perebranch` y se fusionan
 en `perebranch` al menos una vez al día, con los tests en verde.
+
+## Plan de acción con IA (`assistant.py`)
+
+En **Alertas**, el recuadro «Borrador del plan de acción» pide a un LLM un resumen y de 3 a 5 acciones. Es la
+«Integració LLM» del back, generalizada: funciona con la pasarela LLM del equipo (compatible con OpenAI) o con
+Ollama local, y también se usa en la página «Prototipo del back». Configuración en `.env` (ver `.env.example`; la
+clave **no** se sube a git). Sin LLM configurado, el resto funciona igual.
+
+- Los datos de la alerta se pasan al modelo entre `<datos_no_fiables>` y el mensaje de sistema prohíbe obedecer
+  instrucciones que vengan ahí (probado con el correo `ALR-20261020-011905`, que intenta forzar un falso positivo).
+- El modelo solo redacta: no cambia el veredicto, la gravedad ni ejecuta acciones.
+- Con el modelo `ornith` de la pasarela el razonamiento va desactivado por defecto (~6 s por respuesta en vez de ~30 s);
+  `LLM_REASONING=1` lo activa.

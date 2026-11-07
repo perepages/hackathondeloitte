@@ -79,6 +79,11 @@ def md(text: str) -> str:
     return re.sub(r"([\\`*_{}\[\]()#+\-.!|>~<])", r"\\\1", html.escape(str(text), quote=False))
 
 
+def llm_md(text: str) -> str:
+    """Texto del LLM para st.markdown: los títulos (#) pasan a negrita para no romper la jerarquía de la página."""
+    return re.sub(r"^\s*#{1,6}\s*(.+?)\s*#*\s*$", r"**\1**", text or "", flags=re.M)
+
+
 def fmt_time(iso: str) -> str:
     return iso.replace("T", " ")[:16] + " UTC" if iso else "—"
 

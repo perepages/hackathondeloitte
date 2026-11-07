@@ -213,3 +213,17 @@ def contain(action: str, target: str, justification: str, token: str = "") -> di
         "target": target, "justification": justification, "approval_token": token}, timeout=15)
     r.raise_for_status()
     return r.json()
+
+
+# ----------------------------------------------------------------------------- plan de acción (LLM)
+
+def llm_status() -> tuple[bool, str]:
+    """(¿hay LLM?, descripción). El LLM lo pone el back: assistant.py."""
+    import assistant
+    return assistant.available()
+
+
+def action_plan(view: dict):
+    """Plan de acción redactado por el LLM, a trozos (para st.write_stream). El LLM solo redacta: no decide."""
+    import assistant
+    return assistant.action_plan(view)

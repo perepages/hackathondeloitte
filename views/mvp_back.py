@@ -128,5 +128,20 @@ if preview_data and preview_data.get("alert", {}).get("alert_id") == selected_id
     with tab_alert:
         st.json(alert)
 
+    # «Integració LLM» del back (commit 58be229), ahora a través de assistant.py:
+    # sirve con Ollama o con la pasarela LLM del equipo, y protege contra instrucciones ocultas.
+    import assistant
+
+    st.divider()
+    st.subheader("🤖 Pla d'Acció Recomanat")
+    llm_ok, llm_info = assistant.available()
+    if st.button("Generar resum d'accions", type="primary", use_container_width=True, disabled=not llm_ok):
+        try:
+            with st.spinner(f"Connectant amb el LLM ({llm_info})..."):
+                st.write_stream(assistant.action_plan(preview_data))
+        except Exception as exc:
+            st.error(f"Error al connectar amb el LLM: {exc}")
+    st.caption(llm_info)
+
 else:
     st.info("Selecciona una alerta y pulsa **Investigar alerta** para recopilar evidencias.")
