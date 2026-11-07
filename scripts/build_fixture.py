@@ -10,6 +10,10 @@ Requiere la API simulada de Deloitte en http://127.0.0.1:8000.
 
     .venv\\Scripts\\python.exe scripts/build_fixture.py
     .venv\\Scripts\\python.exe scripts/build_fixture.py --limit 20
+
+Probar otro LLM sin pisar la muestra (p. ej. Ollama) y compararlo con la de referencia:
+    $env:LLM_PROVIDER="ollama"; $env:LLM_MODEL="llama3"
+    .venv\\Scripts\\python.exe scripts/build_fixture.py --out data/fixture_llama3.json --workers 1 --reference data/fixture.json
 """
 from __future__ import annotations
 
@@ -70,7 +74,14 @@ def main():
     ap.add_argument("--sample", default=DEFAULT_SAMPLE)
     ap.add_argument("--limit", type=int, default=150)
     ap.add_argument("--workers", type=int, default=4, help="alertas en paralelo (cada una llama a la API y al LLM)")
+    ap.add_argument("--out", default=OUT, help="dónde guardar la muestra (por defecto data/fixture.json)")
+    ap.add_argument("--reference", help="otra muestra con la que comparar veredictos (p. ej. data/fixture.json)")
     args = ap.parse_args()
+    out_path = os.path.abspath(args.out)
+    comparison_path = os.path.splitext(out_path)[0] + "_comparacion.json" if out_path != OUT else COMPARISON
+    import assistant
+    print(f"LLM: {assistant.config()['provider']} · modelo {assistant.config()['model']} · "
+          f"{assistant.available()[1]} · motor {os.getenv('SOC_VERDICT_ENGINE', 'auto')}", flush=True)
 
     with open(args.sample, encoding="utf-8") as f:
         ids = [json.loads(line)["alert_id"] for line in f if line.strip()][: args.limit]
@@ -98,14 +109,19 @@ def main():
         for p in group:
             p["_ejemplo"]["incident_id"] = f"INC-EJ-{n:03d}"
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8") as f:
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
-    print(f"{len(out)} alertas -> {OUT} ({os.path.getsize(OUT) // 1024} KB, {time.time() - t0:.0f} s)")
-    compare(out)
+    print(f"{len(out)} alertas -> {out_path} ({os.path.getsize(out_path) // 1024} KB, {time.time() - t0:.0f} s, "
+          f"{(time.time() - t0) / max(1, len(out)):.1f} s por alerta con {args.workers} en paralelo)")
+    reference = None
+    if args.reference:
+        with open(args.reference, encoding="utf-8") as f:
+            reference = {p["alert"]["alert_id"]: p for p in json.load(f)}
+    compare(out, comparison_path, reference)
 
 
-def compare(out: list[dict]) -> None:
+def compare(out: list[dict], path: str = COMPARISON, reference: dict | None = None) -> None:
     """Back (LLM + política) frente a las reglas de ejemplo: dónde coinciden y dónde no."""
     from collections import Counter
     sources = Counter(p.get("decision_source") for p in out)
@@ -125,13 +141,35 @@ def compare(out: list[dict]) -> None:
         "discrepancias_por_regla": dict(Counter(d["rule_id"] for d in diffs).most_common()),
         "discrepancias": diffs,
     }
-    with open(COMPARISON, "w", encoding="utf-8") as f:
+    failures = Counter(n.split("(", 1)[-1].split(")")[0][:80] for p in out for n in p.get("decision_notes") or []
+                       if n.startswith("La IA no dio una propuesta válida"))
+    if failures:
+        report["fallos_llm"] = dict(failures.most_common())
+    if reference:
+        both = [p for p in out if p["alert"]["alert_id"] in reference]
+        ref = lambda p: reference[p["alert"]["alert_id"]]  # noqa: E731
+        report["frente_a_referencia"] = {
+            "comparadas": len(both),
+            "mismo_veredicto": sum(p["verdict"] == ref(p)["verdict"] for p in both),
+            "misma_decision": sum(p["decision"] == ref(p)["decision"] for p in both),
+            "discrepancias": [{"alert_id": p["alert"]["alert_id"], "rule_id": p["alert"].get("rule_id"),
+                               "este": [p["verdict"], p["decision"]], "referencia": [ref(p)["verdict"], ref(p)["decision"]],
+                               "justificacion": p["justification"][:300]}
+                              for p in both if (p["verdict"], p["decision"]) != (ref(p)["verdict"], ref(p)["decision"])],
+        }
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=1)
     n = len(out) or 1
     print(f"Origen de la propuesta: {dict(sources)}")
     print(f"Mismo veredicto que las reglas: {same_verdict}/{len(out)} ({same_verdict / n:.0%}); "
           f"misma decisión: {same_decision}/{len(out)} ({same_decision / n:.0%})")
-    print(f"Discrepancias -> {COMPARISON}")
+    if failures:
+        print(f"Fallos del LLM (se usaron las reglas): {dict(failures.most_common(5))}")
+    if reference:
+        r = report["frente_a_referencia"]
+        print(f"Frente a la referencia: mismo veredicto {r['mismo_veredicto']}/{r['comparadas']}, "
+              f"misma decisión {r['misma_decision']}/{r['comparadas']}")
+    print(f"Discrepancias -> {path}")
 
 
 if __name__ == "__main__":
