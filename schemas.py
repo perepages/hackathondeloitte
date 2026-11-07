@@ -40,13 +40,21 @@ class ContextRecord(BaseModel):
 
 
 class TriagePreview(BaseModel):
-    """Evidence-first preview; not a final analyst ticket or LLM verdict."""
+    """Evidence-first preview and Level 1 SOC triage decision."""
 
     alert: Alert
     contexts: list[ContextRecord] = Field(default_factory=list)
     related_logs: list[dict[str, Any]] = Field(default_factory=list)
     queries: list[QueryRecord] = Field(default_factory=list)
-    verdict: Literal["needs_more_info"] = "needs_more_info"
+    verdict: Literal["true_positive", "benign_true_positive", "false_positive", "needs_more_info"] = "needs_more_info"
+    verdict_rationale: str = ""
+    confidence: float = 0.5
     severity: str
     severity_rationale: str
+    recommended_actions: list[dict[str, Any]] = Field(default_factory=list)
+    escalation: dict[str, Any] = Field(default_factory=lambda: {"escalate": False, "to": None, "reason": ""})
+    summary: str = ""
+    mitre: list[str] = Field(default_factory=list)
+    decision_engine: str = "rules"
+    ticket: dict[str, Any] | None = None
     open_questions: list[str] = Field(default_factory=list)

@@ -4,6 +4,7 @@ import re
 import soc_api
 from policy import CRITICALITY_ORDER, apply_severity_adjustment, base_severity
 from schemas import Alert, ContextRecord, QueryRecord, TriagePreview
+from verdict import build_soc_ticket, evaluate_verdict, evaluate_verdict_with_llm
 
 
 _PRODUCT_TO_LOG_SOURCE = {
@@ -78,8 +79,12 @@ def _criticality_rank(value: str) -> int:
         return -1
 
 
-def analyze_alert(alert_id: str) -> TriagePreview:
-    """Collect bounded SOC evidence and return a cautious, non-final preview."""
+def analyze_alert(
+    alert_id: str,
+    use_llm: bool = False,
+    model: str = "llama3",
+) -> TriagePreview:
+    """Collect bounded SOC evidence and return triaged result with verdict."""
     raw_alert = soc_api.get_alert(alert_id)
     alert = Alert.model_validate(raw_alert)
     contexts: list[ContextRecord] = []
@@ -245,8 +250,36 @@ def analyze_alert(alert_id: str) -> TriagePreview:
 
     if not related_logs:
         open_questions.append("Corroborar si hubo actividad posterior o impacto efectivo.")
-    open_questions.append(
-        "El veredicto queda en needs_more_info: esta primera versión no usa todavía un LLM ni sustituye al analista."
+
+    # Apply verdict decision using expert rule engine or LLM
+    if use_llm:
+        verdict_res = evaluate_verdict_with_llm(
+            alert=alert,
+            contexts=contexts,
+            related_logs=related_logs,
+            severity=severity,
+            model=model,
+        )
+    else:
+        verdict_res = evaluate_verdict(
+            alert=alert,
+            contexts=contexts,
+            related_logs=related_logs,
+            severity=severity,
+        )
+
+    if verdict_res.verdict == "needs_more_info" and not open_questions:
+        open_questions.append(
+            "Evidencias insuficientes para confirmar veredicto: requiere análisis manual adicional."
+        )
+
+    ticket = build_soc_ticket(
+        alert=alert,
+        contexts=contexts,
+        related_logs=related_logs,
+        verdict_res=verdict_res,
+        severity=severity,
+        severity_rationale=rationale,
     )
 
     return TriagePreview(
@@ -254,8 +287,16 @@ def analyze_alert(alert_id: str) -> TriagePreview:
         contexts=contexts,
         related_logs=related_logs,
         queries=queries,
-        verdict="needs_more_info",
+        verdict=verdict_res.verdict,
+        verdict_rationale=verdict_res.rationale,
+        confidence=verdict_res.confidence,
         severity=severity,
         severity_rationale=rationale,
-        open_questions=list(dict.fromkeys(open_questions)),
+        recommended_actions=verdict_res.recommended_actions,
+        escalation=verdict_res.escalation,
+        summary=verdict_res.summary,
+        mitre=verdict_res.mitre,
+        decision_engine=verdict_res.decision_engine,
+        ticket=ticket,
+        open_questions=list(dict.fromkeys(open_questions)) if verdict_res.verdict == "needs_more_info" else [],
     )
