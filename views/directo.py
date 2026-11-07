@@ -46,8 +46,10 @@ def placeholder(alert_id: str) -> dict:
                                                                   "created_at": ""}
 
 
+BOARD_H = 420  # altura fija de cada columna del kanban; scroll interno si hay muchas tarjetas
+
+
 def paint():
-    cols = board.columns(4)
     work = [ui.live_card(placeholder(state["work"]), "work", state["calls"])] if state["work"] else []
     spec = [
         ("Entran", "Avisos nuevos esperando revisión", [ui.live_card(placeholder(i), "in") for i in state["in"]], False),
@@ -55,8 +57,12 @@ def paint():
         ("Cerradas por el sistema", "Concluidas y justificadas", [ui.live_card(r, "close") for r in state["close"]], False),
         ("Esperan a una persona", "Se escalan a un analista senior", [ui.live_card(r, "esc") for r in state["esc"]], True),
     ]
-    for col, (title, hint, cards, human) in zip(cols, spec):
-        col.markdown(ui.live_column(title, hint, cards, human), unsafe_allow_html=True)
+    html = (
+        '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem">'
+        + "".join(ui.live_column(t, h, c, hum, max_height=BOARD_H) for t, h, c, hum in spec)
+        + "</div>"
+    )
+    board.markdown(html, unsafe_allow_html=True)
     done = len(state["close"]) + len(state["esc"])
     progress.progress(done / max(1, len(ids)), text=f"{done} de {len(ids)} alertas revisadas")
 

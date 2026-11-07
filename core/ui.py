@@ -349,9 +349,11 @@ def live_card(view: dict, state: str, calls: list[dict] | None = None) -> str:
             f'{body}</div>')
 
 
-def live_column(title: str, hint: str, cards: list[str], human: bool = False) -> str:
+def live_column(title: str, hint: str, cards: list[str], human: bool = False,
+                max_height: int | None = None) -> str:
+    style = f' style="max-height:{max_height}px;overflow-y:auto"' if max_height else ""
     return (f'<div class="kcol{" human" if human else ""}"><div class="kh"><span>{esc(title)}</span><span>{len(cards)}</span></div>'
-            f'<div class="hint">{esc(hint)}</div>{"".join(cards)}</div>')
+            f'<div class="hint">{esc(hint)}</div><div class="kcol-body"{style}>{"".join(cards)}</div></div>')
 
 
 def entities_table(alert: dict) -> pd.DataFrame:
