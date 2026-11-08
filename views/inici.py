@@ -62,20 +62,14 @@ for path, icon, title, text in tour:
         c1.markdown(f"**{title}**  \n<span class='muted'>{ui.esc(text)}</span>", unsafe_allow_html=True)
         c2.page_link(path, label="Obrir", icon=icon, use_container_width=True)
 
-c1, c2 = st.columns(2, gap="large")
-with c1:
-    st.subheader("Què fa el sistema i què fa la persona", anchor=False)
-    st.table({
-        "El sistema": ["Llegeix l'alerta i n'extreu equips, usuaris, IP…", "Consulta l'inventari, els empleats, "
-                       "la intel·ligència i els registres", "Proposa conclusió, gravetat i accions",
-                       "Explica en què es basa"],
-        "La persona": ["—", "Pot revisar cada consulta i el seu resultat", "Accepta o corregeix la proposta",
-                       "Aprova (o no) cada acció de resposta"],
-    })
-with c2:
-    st.subheader("Paraules que surten a la demo", anchor=False)
-    for term, meaning in ui.GLOSSARY.items():
-        st.markdown(f"**{term}.** {meaning}")
-    with st.expander("Les quatre conclusions possibles"):
-        for v in ui.VERDICT_ORDER:
-            st.markdown(f"{ui.verdict_badge(v)} {ui.esc(ui.VERDICT_HELP[v])}", unsafe_allow_html=True)
+st.subheader("Què fa el sistema i què fa la persona", anchor=False)
+st.table({
+    "El sistema": ["Llegeix l'alerta i n'extreu equips, usuaris, IP…", "Consulta l'inventari, els empleats, "
+                   "la intel·ligència i els registres", "Proposa conclusió, gravetat i accions",
+                   "Explica en què es basa"],
+    "La persona": ["—", "Pot revisar cada consulta i el seu resultat", "Accepta o corregeix la proposta",
+                   "Aprova (o no) cada acció de resposta"],
+})
+with st.expander("Les quatre conclusions possibles"):
+    for v in ui.VERDICT_ORDER:
+        st.markdown(f"{ui.verdict_badge(v)} {ui.esc(ui.VERDICT_HELP[v])}", unsafe_allow_html=True)
