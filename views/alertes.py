@@ -120,7 +120,7 @@ def render_list() -> bool:
     st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
                  height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-cell",
                  key="cola_tabla",
-                 column_config={" ": st.column_config.ImageColumn(width=44),
+                 column_config={" ": st.column_config.ImageColumn(width=20),
                                 "Gravetat": st.column_config.TextColumn(width="small"),
                                 "Què ha detectat": st.column_config.TextColumn(width="large")})
     st.caption(f"{len(filt)} de {len(rows)} alertes · fes clic en una fila per veure'n la fitxa a sota")
