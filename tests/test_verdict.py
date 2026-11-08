@@ -36,7 +36,7 @@ def test_true_positive_grave_se_escala_aunque_el_llm_diga_cerrar(monkeypatch):
     _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.8, "decision": "close",
                        "severity_adjustment": 1, "recommended_actions": []})
     out = _decide(_preview(), matrix="high")
-    assert out.severity == "critical" and out.decision == "escalate"
+    assert out.severity == "high" and out.decision == "escalate"  # el +1 de la IA no compta: no és un fet comprovat
     assert any("§5" in n for n in out.decision_notes)
 
 
@@ -50,8 +50,8 @@ def test_ajuste_total_maximo_un_nivel(monkeypatch):
 def test_ataque_bloqueado_de_gravedad_informativa_se_cierra(monkeypatch):
     _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.8, "decision": "escalate",
                        "severity_adjustment": -1})
-    out = _decide(_preview(rule_id="UC-WEB-001"), matrix="low")
-    assert out.severity == "informational" and out.decision == "close"
+    out = _decide(_preview(rule_id="UC-WEB-001", evidence={"action": "blocked"}), matrix="low")
+    assert out.severity == "informational" and out.decision == "close"  # −1 pel bloqueig de l'evidència
 
 
 def test_texto_oculto_fuerza_true_positive_y_escalar_aunque_el_llm_obedezca(monkeypatch):
@@ -124,3 +124,27 @@ def test_bloqueado_por_un_control_aplica_menos_uno_aunque_la_ia_no_lo_haga(monke
     _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.8, "decision": "escalate", "severity_adjustment": 0})
     out = _decide(_preview(rule_id="UC-WEB-001", evidence={"action": "blocked", "hits": 22}), matrix="medium")
     assert out.severity == "low" and out.decision == "close"
+
+
+
+def test_estable_mateix_resultat_encara_que_la_ia_canvii_l_ajust(monkeypatch):
+    """El cas real que variava (posible túnel DNS): la IA diu sempre «atac real» però un cop −1, un altre 0 i un
+    altre +1. Ara la gravetat i la decisió són sempre les mateixes."""
+    outs = []
+    for adj, dec in ((-1, "close"), (0, "escalate"), (1, "escalate")):
+        _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.8, "decision": dec, "severity_adjustment": adj})
+        out = _decide(_preview(rule_id="UC-NET-006"), matrix="medium")
+        outs.append((out.verdict, out.severity, out.decision))
+    assert len(set(outs)) == 1 and outs[0] == ("true_positive", "medium", "escalate")
+
+
+def test_ia_i_regles_no_coincideixen_s_escala_com_a_dubtosa(monkeypatch):
+    # les regles diuen falsa alarma (butlletí legítim); la IA diu atac real de gravetat baixa
+    _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.9, "decision": "close"})
+    out = _decide(_preview(evidence={"sender": "news@shop.example", "subject": "Ofertes"}), matrix="low")
+    assert out.decision == "escalate" and out.confidence <= 0.5
+    assert any("dubtosa" in n for n in out.decision_notes)
+    # i al revés: si coincideixen (falsa alarma), es tanca
+    _llm(monkeypatch, {"verdict": "false_positive", "confidence": 0.9, "decision": "close"})
+    out = _decide(_preview(evidence={"sender": "news@shop.example", "subject": "Ofertes"}), matrix="low")
+    assert out.decision == "close"

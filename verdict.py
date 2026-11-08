@@ -67,6 +67,28 @@ def plain_text(text: str) -> str:
     return re.sub(r"\s{2,}", " ", text)
 
 
+def _label(verdict: str) -> str:
+    return {"true_positive": "atac real", "benign_true_positive": "activitat autoritzada",
+            "false_positive": "falsa alarma", "needs_more_info": "falta informació"}.get(verdict, verdict)
+
+
+def fact_adjustment(alert: dict, verdict: str, rules_view: dict | None, flags: list) -> int:
+    """Ajuste de la política §2 calculado solo con hechos comprobados (nunca con la opinión de la IA, que puede
+    cambiar de una ejecución a otra): −1 si un control lo bloqueó sin ejecución; +1 si un runbook confirma acceso o
+    ejecución. El +1 por identidad VIP o privilegiada lo suma _severity (máximo ±1 en total)."""
+    if verdict != "true_positive":
+        return 0
+    adjustment = 0
+    if (rules_view and rules_view.get("verdict") == "true_positive"
+            and str(rules_view.get("rule", "")).startswith("RB-") and (rules_view.get("severity_adjustment") or 0) > 0):
+        adjustment = 1
+    if blocked_by_control(alert):
+        adjustment = -1
+    if flags:  # quien intenta engañar al clasificador no rebaja la gravedad
+        adjustment = max(0, adjustment)
+    return adjustment
+
+
 def blocked_by_control(alert: dict) -> bool:
     """Política §2, −1: un control lo bloqueó antes de producir efecto (WAF blocked, AV quarantined sin ejecución)."""
     ev = alert.get("evidence") or {}
@@ -238,54 +260,56 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
                           "recommended_actions": None, "injection_detected": False, "rule": ""}
         proposal = rules_view
 
+    # Estabilidad: la IA solo propone el veredicto (y redacta). La gravedad y cerrar/escalar salen de reglas fijas
+    # de la política aplicadas a hechos comprobados, así que con el mismo veredicto el resultado es siempre el mismo.
     verdict = proposal["verdict"]
-    decision = proposal["decision"]
+    proposed_decision = proposal["decision"]
     justification = proposal["justification"]
+    confidence = proposal["confidence"]
     flags = injection_flags(alert)
     if flags:
-        if verdict != "true_positive" or decision != "escalate":
+        if verdict != "true_positive":
             notes.append("Text ocult adreçat al sistema de classificació: es força «atac real» i escalar.")
-        verdict, decision = "true_positive", "escalate"
+            confidence = 0.9  # la conclusión la fija el texto oculto, no la propuesta
+        verdict = "true_positive"
         justification = ("L'alerta conté text adreçat al sistema automàtic de classificació "
                          "(intent de manipulació). " + justification)
     elif proposal.get("injection_detected"):
         notes.append("La IA creu que les dades intenten manipular-la; cal revisar el text de l'alerta.")
 
-    adjustment = proposal.get("severity_adjustment") or 0
-    if verdict == "true_positive" and blocked_by_control(alert) and adjustment >= 0:
-        if adjustment > 0:
-            notes.append("La proposta pujava la gravetat, però l'evidència diu que un control ho va bloquejar "
-                         "sense execució: s'aplica −1 (política del SOC §2).")
-        adjustment = -1
-    if (rules_view and rules_view.get("verdict") == verdict == "true_positive"
-            and str(rules_view.get("rule", "")).startswith("RB-")  # solo hechos comprobados por un runbook
-            and (rules_view.get("severity_adjustment") or 0) > 0 and adjustment <= 0):
-        # hecho objetivo que las reglas han comprobado (ejecución o acceso confirmado): +1 de la política §2
-        adjustment = 1
-    if flags:  # quien intenta engañar al clasificador no rebaja la gravedad
-        adjustment = max(0, adjustment)
-    severity, rationale = _severity(verdict, matrix_severity, matrix_rationale, privileged_identity, adjustment)
+    # Opción 2: la IA y las reglas no coinciden en si es un ataque -> conclusión dudosa, la revisa una persona
+    attack = lambda v: {"true_positive": True, "benign_true_positive": False, "false_positive": False}.get(v)  # noqa
+    doubtful = (source == "llm" and not flags and rules_view is not None
+                and attack(verdict) is not None and attack(rules_view.get("verdict")) is not None
+                and attack(verdict) != attack(rules_view["verdict"]))
+    if doubtful:
+        confidence = min(confidence if confidence is not None else 0.5, 0.5)
 
-    forced = None
-    if verdict == "true_positive" and severity in ("high", "critical"):
-        forced = "atac real de gravetat alta o crítica"
-    elif verdict == "needs_more_info" and SEVERITY_ORDER.index(severity) >= SEVERITY_ORDER.index("medium"):
-        forced = "falten dades en una alerta de gravetat mitjana o superior"
-    elif flags:
-        forced = "intent de manipulació del classificador"
-    if forced:
-        if decision == "close":
-            notes.append(f"S'escala tot i que la proposta era tancar: {forced} (política del SOC §5).")
-        decision = "escalate"
-    elif (severity in ("informational", "low") and decision == "escalate" and source == "llm"
-          and (rules_view or {}).get("decision") != "escalate"):
-        # §3: gravedad baja o informativa no se escala; los casos obligatorios del §5 (fraude, credenciales,
-        # ejecución) los marcan las reglas con decision=escalate y entonces se respeta
-        notes.append(f"Es tanca tot i que la IA proposava escalar: gravetat {SEVERITY_CA[severity]} i cap criteri "
-                     "d'escalat obligatori (política del SOC §3 i §5).")
-        decision = "close"
-    elif decision is None:
-        decision = "close"
+    severity, rationale = _severity(verdict, matrix_severity, matrix_rationale, privileged_identity,
+                                    fact_adjustment(alert, verdict, rules_view, flags))
+
+    reasons = []
+    if flags:
+        reasons.append("intent de manipulació del classificador")
+    if doubtful:
+        reasons.append(f"la IA i les regles dels runbooks no coincideixen (IA: {_label(verdict)}; regles: "
+                       f"{_label(rules_view['verdict'])}): conclusió dubtosa")
+    if verdict == "true_positive" and SEVERITY_ORDER.index(severity) >= SEVERITY_ORDER.index("medium"):
+        reasons.append(f"atac real de gravetat {SEVERITY_CA[severity]}")
+    if verdict == "needs_more_info" and SEVERITY_ORDER.index(severity) >= SEVERITY_ORDER.index("medium"):
+        reasons.append("falten dades en una alerta de gravetat mitjana o superior")
+    if (rules_view and rules_view.get("decision") == "escalate" and rules_view.get("verdict") == verdict
+            and str(rules_view.get("rule", "")).startswith("RB-")):
+        reasons.append(f"criteri d'escalat obligatori del runbook ({rules_view['rule']})")
+    decision = "escalate" if reasons else "close"
+    if source == "llm" and proposed_decision and proposed_decision != decision:
+        notes.append(("S'escala" if decision == "escalate" else "Es tanca")
+                     + f" tot i que la IA proposava {'escalar' if proposed_decision == 'escalate' else 'tancar'}: "
+                     + ("; ".join(reasons) if reasons else
+                        f"gravetat {SEVERITY_CA[severity]} i cap criteri d'escalat obligatori")
+                     + " (política del SOC §3 i §5).")
+    elif doubtful:
+        notes.append(f"S'escala: {reasons[0]}.")
 
     raw_actions = proposal["recommended_actions"]
     if raw_actions is None:  # reglas: acciones típicas del caso de uso
@@ -298,7 +322,7 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
 
     return preview.model_copy(update={
         "verdict": verdict,
-        "confidence": proposal["confidence"],
+        "confidence": confidence,
         "severity": severity,
         "severity_rationale": rationale,
         "justification": justification,

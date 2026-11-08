@@ -140,5 +140,12 @@ internos). Los nombres de reglas y descripciones de alerta siguen en castellano 
 Fuera del menú de la demo: «Prototipo del back» e «Incidents» (solo había un incidente de ejemplo); con
 `SOC_DEV=1` vuelven a salir. Nota: en directo, la IA alguna vez puede responder en castellano.
 
+**Decisión estable (8 nov).** La IA solo propone el veredicto. El ajuste ±1 de la gravedad lo calcula el sistema
+con hechos (bloqueado por un control −1, runbook que confirma acceso o ejecución +1, VIP +1) y cerrar/escalar sale de
+reglas fijas de la política: ataque real de gravedad media o más, faltan datos en media o más, texto oculto o criterio
+obligatorio de un runbook → escalar; el resto se cierra. Si la IA y las reglas no coinciden en si es un ataque, se
+escala como «conclusió dubtosa». Medido: las mismas 10 alertas triadas 3 veces dan el mismo resultado. Límite: en un
+caso dudoso la IA puede cambiar su veredicto entre sesiones (ataque / no ataque).
+
 **Siguiente: agrupar alertas en incidentes (`incident_id`, política §6).** Ejemplo claro en la muestra: los tres
 accesos VPN de Logisoft (11, 18 y 25 de octubre, domingos de madrugada desde el mismo ASN) son un mismo incidente.

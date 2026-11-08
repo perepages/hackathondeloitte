@@ -29,7 +29,10 @@ sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 import nivel1_triage as reglas  # noqa: E402  (reglas de ejemplo)
+import soc_api  # noqa: E402
 from triage import analyze_alert  # noqa: E402  (back real)
+
+reglas.API = soc_api.BASE_URL  # la misma API que el back (SOC_API_URL), no la dirección fija de las reglas
 from verdict import NO_APPROVAL, default_actions, injection_flags  # noqa: E402
 
 DEFAULT_SAMPLE = os.path.join(ROOT, "..", "DTT-UAB-The-Hack", "03_alertas", "alertas_muestra_desarrollo.jsonl")
