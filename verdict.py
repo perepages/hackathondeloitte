@@ -154,10 +154,12 @@ def llm_proposal(preview: dict) -> dict:
 # ----------------------------------------------------------------------------- política
 
 def _severity(verdict: str, matrix: str, matrix_rationale: str, vip: bool, adjustment: int) -> tuple[str, str]:
+    # Removed verdict-based early return; severity is now based solely on matrix and adjustments
+
+
+
     if verdict in ("benign_true_positive", "false_positive"):
-        severity = "informational" if matrix in ("informational", "low") else "low"
-        label = "activitat autoritzada" if verdict == "benign_true_positive" else "falsa alarma"
-        return severity, f"{matrix_rationale} Conclusió: {label} → {SEVERITY_CA[severity]} (política del SOC §2)."
+        return "informational", f"veredicto {verdict} → informational (política §2)"
     total = max(-1, min(1, (1 if vip else 0) + adjustment))
     severity = apply_severity_adjustment(matrix, total)
     reasons = []
@@ -287,7 +289,7 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
 
     severity, rationale = _severity(verdict, matrix_severity, matrix_rationale, privileged_identity,
                                     fact_adjustment(alert, verdict, rules_view, flags))
-
+    
     reasons = []
     if flags:
         reasons.append("intent de manipulació del classificador")

@@ -175,11 +175,11 @@ def _svg_uri(svg: str) -> str:
 
 # Botón de opción (radio) dibujado, para la primera columna de la bandeja: la tabla de Streamlit es un lienzo y
 # no admite inputs de verdad, pero sí imágenes. Mismo aspecto que un radio nativo: elección única.
-RADIO_OFF = _svg_uri('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">'
-                     '<circle cx="11" cy="11" r="9" fill="#fff" stroke="#8a8f98" stroke-width="2"/></svg>')
-RADIO_ON = _svg_uri('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">'
-                    f'<circle cx="11" cy="11" r="9" fill="#fff" stroke="{ACCENT}" stroke-width="2"/>'
-                    f'<circle cx="11" cy="11" r="5" fill="{ACCENT}"/></svg>')
+RADIO_OFF = _svg_uri('<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">'
+                     '<circle cx="15" cy="15" r="9" fill="#fff" stroke="#8a8f98" stroke-width="2"/></svg>')
+RADIO_ON = _svg_uri('<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">'
+                    f'<circle cx="15" cy="15" r="9" fill="#fff" stroke="{ACCENT}" stroke-width="2"/>'
+                    f'<circle cx="15" cy="15" r="5" fill="{ACCENT}"/></svg>')
 
 
 def query_legend() -> None:
