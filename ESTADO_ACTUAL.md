@@ -1,160 +1,226 @@
 # Estado actual del proyecto · Triaje N1 Tarvia (reto Deloitte × UAB The Hack)
 
-7 nov 2026 · rama `perebranch` (último commit `5e6848e` + cambios sin commit del veredicto real) · 43 tests en verde
+8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **112 tests en verde** · Streamlit 1.65
 
 ## 1. En una frase
 
-Tenemos una app Streamlit que revisa alertas de seguridad del SOC de Tarvia (comprueba los datos con la API
-de Deloitte, propone una conclusión y lo explica en lenguaje claro) y deja la decisión a una persona. Funciona
-con la muestra de 150 alertas y en vivo con la API real. **El veredicto, la propuesta y las acciones ya los da el
-back** (LLM + reglas de respaldo + política SOC encima, en `verdict.py`); solo `incident_id` sigue siendo de ejemplo.
+App Streamlit (interfaz en catalán) que hace el **triaje de nivel 1** del SOC de Tarvia: lee cada alerta, agrupa las
+repeticiones del mismo evento, investiga con la API de Deloitte, la IA propone si es un ataque, las reglas de los
+runbooks dan una segunda opinión y la **política del SOC fija la gravedad y si se cierra o se escala**. Una persona
+decide al final. Funciona en **modo muestra** (150 alertas ya triadas, sin red) y en **modo directo** (alertas nuevas,
+con la API y la IA).
 
-## 2. Qué funciona hoy
+## 2. Repositorio
 
-| Pieza | Estado |
+| Rama | Estado |
 | --- | --- |
-| Recogida de evidencias por alerta (back, `triage.py`) | ✅ Inventario, empleados, inteligencia, sandbox, cambios aprobados y registros de ±24 h. ~2 s por alerta |
-| Gravedad con la matriz de la política (back, `policy.py`) | ✅ Con ajuste por identidad VIP o privilegiada |
-| Veredicto, propuesta (cerrar/escalar) y acciones | ✅ `verdict.decide` (back): propuesta del LLM en JSON (`assistant.decide_json`, ~10 s); si falla o no hay clave, las reglas de `scripts/nivel1_triage.py`. La política se aplica siempre encima (gravedad, escalado obligatorio, aprobaciones, OT, uso dual). `decision_source` dice de dónde salió |
-| Detección de intentos de engaño (texto oculto para el clasificador) | ✅ En el back, siempre: fuerza `true_positive` + escalar y la gravedad no puede bajar |
-| Gravedad según la conclusión | ✅ Actividad autorizada o falsa alarma → informational/low; ajustes ±1 como máximo en total; ataque real informativo (bloqueado sin efecto) se cierra |
-| Plan de acción con IA (`assistant.py`) | ✅ Pasarela LLM de la UAB (modelo `ornith`), ~6 s. Rechaza instrucciones ocultas en los datos. Ollama soportado pero sin probar (no está instalado) |
-| Front: 7 páginas | ✅ Inicio, Alertas, Informe para N2, Acciones de respuesta, Triaje en directo, Resumen, Incidentes (+ «Prototipo del back») |
-| Modo en vivo (`SOC_MODE=live`) | ✅ Probado con 10 alertas reales fuera de la muestra: ~16 s, 8 cerradas y 2 escaladas |
-| Decisión de la persona | ✅ Guardada en SQLite (`data/soc.db`): quién, cuándo, si corrigió al sistema, nota |
-| Informe en formato Deloitte | ✅ Los 150 informes cumplen `ticket_salida.schema.json` |
-| Contención con aprobación (nivel 4) | ✅ Pendiente → aprobada (N2) → hecha; reglas de la política (sin aprobación: bloquear IOC y borrar correo; nada sobre OT). Simulada en modo muestra |
-| Incidentes (niveles 2-3) | ⚠️ Pantalla hecha, pero el back no genera `incident_id`: solo hay un incidente de ejemplo |
+| `perebranch` | La buena. Todo lo de abajo. |
+| `main` | Idéntica a `perebranch` (se hace *fast-forward* en cada push). |
+| `pozobranch` (Marc) | **No se usa.** Su lógica de runbooks se portó a `rules.py` con los errores corregidos; su `app.py` era la app antigua. |
+| `Prova_LLM` (Martí) | **No se usa.** Experimento sobre el `main` antiguo; duplicaba lo que hace `verdict.py`. |
+| `front-a`, `front-b` | Antiguas, ya fusionadas. |
 
-## 3. Decisiones técnicas clave
+Fuera de git en la copia local: `demo/triaje.json` aparece **borrado sin commit** (no lo hemos tocado nosotros;
+`git checkout demo/triaje.json` lo recupera) y `PLAN_INDIVIDUAL.md` (plan personal, sin subir).
 
-1. **Todo en Python y Streamlit, sin API intermedia.** El front importa directamente el back (`triage.py`,
-   `assistant.py`). La única API es la simulada de Deloitte (puerto 8000).
-2. **Una sola puerta a los datos: `core/data.py`.** Traduce la salida del back (`TriagePreview`, en `schemas.py`)
-   al formato que leen las pantallas (`to_view()`). Si el back cambia, solo se toca este fichero. El contrato
-   completo está documentado al principio de `core/data.py`.
-3. **Dos modos.**
-   - `SOC_MODE=fixture` (por defecto): lee `data/fixture.json` (150 alertas con la salida real del back), sin red.
-   - `SOC_MODE=live`: llama al back contra la API de Deloitte.
-4. **Campos de ejemplo transparentes.** Lo que el back aún no da sale de reglas de prueba, se lista en
-   `example_fields` y se marca en pantalla. Cuando el back lo dé, manda el suyo sin tocar las pantallas.
-   `SOC_EXAMPLES=0` los quita.
-5. **Seguridad ante el atacante.** El texto de las alertas nunca se pinta como HTML (`ui.md`, `ui.esc`), y al LLM se
-   le pasa dentro de `<datos_no_fiables>` con la orden de no obedecerlo. Probado con el correo
-   `ALR-20261020-011905`, que intenta forzar un «falso positivo».
-6. **El LLM solo redacta.** No cambia veredicto ni gravedad ni ejecuta nada. Va con el razonamiento desactivado
-   (`chat_template_kwargs.enable_thinking=false`): con él, `ornith` gastaba los tokens pensando y no respondía.
-7. **La persona decide y queda registrado.** Ninguna acción se ejecuta sin aprobación, salvo las que la política
-   permite al N1.
-8. **Diseño para alguien de fuera del SOC.** Lenguaje claro («Ataque real», «Falsa alarma»…), cada consulta a la
-   API traducida a una frase, y línea visual de Deloitte: negro y blanco, azul `#1076A8` para lo interactivo,
-   verde `#86BC25` solo de acento, Open Sans. El logo de Deloitte sale de la presentación oficial del reto.
-   Los colores de datos (conclusión y gravedad) están validados para daltonismo.
-9. **La clave del LLM no se sube nunca:** va en `.env` (ignorado por git); `.env.example` explica qué poner.
+## 3. Cómo arrancarlo
 
-## 4. Cómo funciona el código
-
-```
-app.py ── navegación (st.navigation), tema, logo
-  └─ views/                 una página por fichero
-       inici.py            qué es el sistema, flujo en 4 pasos, cifras, recorrido de la demo
-       alertes.py              Alertas: bandeja arriba + ficha de la alerta elegida debajo (5 pasos, IA, decisión)
-       informe_n2.py            Informe para N2 en formato Deloitte, validado y descargable
-       accions_resposta.py        Acciones de respuesta: tarjetas por alerta + aprobar/ejecutar + registro
-       triatge_directe.py           Triaje en directo: kanban Entran → Investigando → Cerradas / Esperan a una persona
-       resum.py             Resumen: cifras, conclusiones, mapa de gravedad, por día, SLA
-       incidents.py        Alertas agrupadas por incident_id + línea temporal MITRE
-       prototip_back.py          primera app del back, conservada
-  └─ core/
-       data.py              ÚNICA puerta a los datos: to_view, load_results, run_triage, analyze_live,
-                            suggest_ids, approve/contain, llm_status/action_plan
-       store.py             SQLite con las decisiones de la persona
-       ui.py                colores, etiquetas en lenguaje claro, badges, matriz, tarjetas, barra de pasos
-back (raíz)
-  soc_api.py               cliente HTTP de la API de Deloitte
-  triage.py                analyze_alert(id) -> TriagePreview (evidencias + gravedad + preguntas abiertas)
-  policy.py · schemas.py   matriz de gravedad · modelos Pydantic
-  assistant.py             plan de acción con LLM (pasarela UAB u Ollama)
-scripts/
-  build_fixture.py         regenera data/fixture.json (necesita la API)
-  nivel1_triage.py         reglas de ejemplo (veredicto, decisión) mientras el back no lo da
-```
-
-**Recorrido de una alerta:** `data.run_triage` / `data.analyze_live` → `triage.analyze_alert` consulta la API →
-`to_view` añade la frase de cada consulta y, si faltan, los campos de ejemplo → la pantalla lo pinta → la persona
-decide (`store.save_review`) → el informe se construye con `ticket.build_ticket` y se valida contra el esquema.
-
-**Arrancar:**
 ```powershell
+# instalar (una vez)
 python -m venv .venv; .venv\Scripts\python.exe -m pip install -r requirements.txt
-copy .env.example .env      # y poner LLM_API_KEY (web de recursos de la hackatón)
-.venv\Scripts\python.exe -m streamlit run app.py                         # con la muestra, sin red
-$env:SOC_MODE="live"; .venv\Scripts\python.exe -m streamlit run app.py   # con la API de Deloitte en :8000
-.venv\Scripts\python.exe -m pytest -q                                    # 34 tests
+copy .env.example .env          # y poner LLM_API_KEY
+
+# modo muestra (por defecto): 150 alertas ya triadas, sin API ni IA
+.venv\Scripts\python.exe -m streamlit run app.py
+
+# modo directo: primero la API de Deloitte (con el Python del sistema, que es el que tiene FastAPI)
+#   desde DTT-UAB-The-Hack\06_herramientas:
+python -m uvicorn mock_soc_api:app --port 8000
+#   y la app:
+$env:SOC_MODE="live"; .venv\Scripts\python.exe -m streamlit run app.py
+
+# tests
+.venv\Scripts\python.exe -m pytest -q
 ```
-La API de Deloitte se arranca desde `../DTT-UAB-The-Hack/06_herramientas` con
-`python -m uvicorn mock_soc_api:app --port 8000`.
 
-## 5. Ramas
+En modo directo la app empieza vacía: las alertas entran por **Triatge en directe** (subir un `.jsonl`, pegar ids o las
+10 de ejemplo de la cola) o por **Alertes → Actualitzar alertes** (5 nuevas de la cola por clic). La barra lateral dice
+el modo: «Mostra de 150 alertes del repte» o «Connectat a l'API del SOC».
 
-- `perebranch`: la buena, con todo integrado (A + B + back) y subida a GitHub.
-- `front-a` y `front-b`: se han quedado atrás. Quien vuelva a trabajar en ellas tiene que hacer `git merge perebranch` antes.
-- `main`: solo el back original (primera versión + «Integració LLM»). No se ha tocado.
+## 4. Arquitectura y recorrido de una alerta
 
-## 6. Pendiente y cosas a vigilar
+```
+                ┌──────────── front (Streamlit, catalán) ────────────┐
+ app.py ──► views/*.py ──► core/ui.py (lenguaje claro, colores, componentes)
+                │
+                ▼
+          core/data.py  ← ÚNICA puerta a los datos (contrato del front en su docstring)
+           │   modo muestra: lee data/fixture.json
+           │   modo directo: run_triage()
+           ▼
+ 1. _fetch_alert   soc_api.get_alert (la API es la fuente de verdad; si no la reconoce → se salta y se avisa)
+ 2. correlation.correlate   agrupa el mismo evento repetido (ventana SOC_DEDUP_WINDOW_MIN)
+ 3. _triage_one    triage.analyze_alert(alert) — 4 a la vez (SOC_WORKERS)
+       ├─ evidencias: inventario, usuario + su puesto, servicio afectado, inteligencia, sandbox,
+       │  cambios (por equipo y citados en la evidencia), registros ±24 h
+       ├─ gravedad base: policy.base_severity (matriz §2) con el activo más crítico
+       └─ verdict.decide
+             ├─ assistant.decide_json  → la IA propone el VEREDICTO (JSON, datos como no fiables)
+             ├─ rules.evaluate        → runbooks + reglas por caso de uso (respaldo y segunda opinión)
+             └─ política (siempre): texto oculto, ajuste ±1 por hechos, cerrar/escalar, acciones, OT
+ 4. to_view        → contrato del front; se guarda en la sesión (data_live_results)
+                ▼
+ la persona decide (core/store.py → data/soc.db)  ·  informe N2 validado contra ticket_salida.schema.json
+```
 
-- **Hablar con el equipo del back** del veredicto con LLM (`verdict.py`): ellos eligieron Ollama, que está soportado
-  (`assistant._complete_ollama`, con `format="json"`) pero sin probar.
-- Modo en vivo más lento: ~10 s más por alerta por la llamada al LLM. `SOC_VERDICT_ENGINE=rules` lo evita (solo reglas).
-- Discrepancias discutibles con las reglas (en `data/comparacion_veredictos.json`): el LLM escala phishing confirmado
-  de gravedad baja (las reglas lo cierran tras purgar y bloquear); da por autorizados un bucket público hecho desde CI
-  (UC-CLD-003) y una subida a WeTransfer (UC-DLP-001); llama falsa alarma a escáneres bloqueados por el WAF.
-- `incident_id` lo debería generar el back (agrupar por equipo/usuario/indicador compartido en una ventana de tiempo).
-- `on_event` en `analyze_alert` para que el directo muestre las consultas en tiempo real (hoy salen al acabar cada alerta).
-- Guion de la demo («camino feliz») y ensayo: lo haremos aparte.
-- La guía visual publicada (https://claude.ai/artifact/9TxhFkL7oNJ9bhKroUUrjs) tiene capturas del diseño anterior.
-- `docs/PLAN_FRONTEND.md` describe el plan inicial; el contrato vigente está en `core/data.py`.
-- Si se cambia `core/ui.py` con la app abierta, hay que reiniciar Streamlit.
+## 5. Archivos
 
-## 7. Paso exacto siguiente
+### Back (raíz)
 
-**Hecho (7 nov, noche): back de Marc integrado y gravedad corregida.**
-- `rules.py`: motor de reglas = runbooks RB-01…RB-10 de Marc (rama `pozobranch`), en castellano y con sus errores
-  corregidos (TIP «known-good» tomado como malicioso, cambios aprobados sin mirar fecha, pentest por fecha y no por
-  IP, simulacro/SCCM con una palabra suelta, viaje de RRHH sin fechas, ATO por subcadena, frases cortas al asistente)
-  + nuestras reglas por caso de uso + regla nueva RB-03 de VPN de proveedor. Es el respaldo si falla la IA y, si no,
-  una **segunda opinión** visible en la ficha (`second_opinion`).
-- Gravedad (§2): se busca siempre el activo afectado (puesto del usuario, frontal de la tienda, asistente Vela,
-  bucket); antes solo 51/150 alertas tenían activo, ahora 145/150. La matriz está comprobada celda a celda contra
-  `politica_soc.md` (test). El calendario de cambios está en **hora de España** (UTC+2/UTC+1) y se convierte a UTC.
-- Política encima de la IA: −1 si un control lo bloqueó; +1 si un runbook confirma acceso o ejecución; gravedad
-  baja o informativa no se escala salvo criterio obligatorio §5; a la IA solo se le marcan como autorizados los
-  cambios que cubren de verdad la alerta.
-- Resultado con las 150 alertas: IA y reglas coinciden en 136/150 veredictos; 22 escaladas, todas graves o
-  obligatorias; 0 incoherencias (escalada informativa o ataque grave cerrado). 64 tests en verde.
-- No se ha juntado la rama `pozobranch` con git: su `app.py` es la app antigua y sus campos no encajaban con el front.
+| Archivo | Qué hace | Origen |
+| --- | --- | --- |
+| `soc_api.py` | Cliente HTTP de la API simulada de Deloitte (`SOC_API_URL`). | Marc |
+| `schemas.py` | Modelos Pydantic: `Alert` (acepta campos extra, p. ej. `group`), `TriagePreview` con la propuesta completa (`verdict`, `confidence`, `decision`, `recommended_actions`, `injection_flags`, `decision_source`, `decision_notes`, `rule_applied`, `second_opinion`…). | Marc + nuestro |
+| `policy.py` | Matriz de gravedad §2 (comprobada celda a celda contra `politica_soc.md`), ajuste ±1, activo afectado cuando la alerta no trae equipo (`service_assets`, `cloud_asset`), nombres en catalán (`SEVERITY_CA`, `criticality_ca`). | Marc + nuestro |
+| `triage.py` | `analyze_alert(alert_id, decide=True, alert=None)`: recoge evidencias y calcula la gravedad base. Busca el activo afectado (equipo → puesto del usuario → servicio/bucket) y los cambios citados en la evidencia (`CHG-…`). | Marc + nuestro |
+| `correlation.py` | **Correlación / deduplicación de nivel 1** (ver §6.1). | nuestro (8 nov) |
+| `verdict.py` | `decide()`: une IA + reglas + política (ver §6.2). También `plain_text` (quita códigos internos de los textos de la IA), `fact_adjustment`, `blocked_by_control`, normalización de acciones. | nuestro |
+| `guard.py` | **Defensa ante manipulación (prompt injection)**, ver §6.3: limpieza antes de la IA, detector ampliado, objetivos de acciones, citas inventadas, Markdown seguro. | nuestro (8 nov) |
+| `rules.py` | Motor de reglas: runbooks RB-01…RB-10 de Marc **con 9 errores corregidos** + reglas por caso de uso + regla nueva RB-03 de VPN de proveedor. Respaldo si falla la IA y segunda opinión visible. | Marc (lógica) + nuestro |
+| `assistant.py` | Todo lo del LLM: configuración (pasarela UAB `ornith` u Ollama), `decide_json` (veredicto en JSON) y `action_plan` (borrador del plan, en streaming). Los prompts piden **catalán**, tratar los datos como no fiables y no citar campos internos. | nuestro (idea de Martí) |
+| `scripts/nivel1_triage.py` | Reglas por caso de uso originales (las usa `rules.py`). | nuestro |
+| `scripts/build_fixture.py` | Regenera `data/fixture.json`: lee las 150 alertas de la muestra, **las agrupa**, las tría con el back y compara con las reglas (`--out`, `--reference`, `--workers`). | nuestro |
 
-**Interfaz en catalán (7 nov, noche).** Todo lo que ve el jurado está en catalán: pantallas, explicaciones de
-gravedad, notas de la política, reglas y textos de la IA (se le pide escribir en catalán y no mencionar campos
-internos). Los nombres de reglas y descripciones de alerta siguen en castellano porque son datos de Deloitte.
-Fuera del menú de la demo: «Prototipo del back» e «Incidents» (solo había un incidente de ejemplo); con
-`SOC_DEV=1` vuelven a salir. Nota: en directo, la IA alguna vez puede responder en castellano.
+### Front
 
-**Decisión estable (8 nov).** La IA solo propone el veredicto. El ajuste ±1 de la gravedad lo calcula el sistema
-con hechos (bloqueado por un control −1, runbook que confirma acceso o ejecución +1, VIP +1) y cerrar/escalar sale de
-reglas fijas de la política: ataque real de gravedad media o más, faltan datos en media o más, texto oculto o criterio
-obligatorio de un runbook → escalar; el resto se cierra. Si la IA y las reglas no coinciden en si es un ataque, se
-escala como «conclusió dubtosa». Medido: las mismas 10 alertas triadas 3 veces dan el mismo resultado. Límite: en un
-caso dudoso la IA puede cambiar su veredicto entre sesiones (ataque / no ataque).
+| Archivo | Página / función |
+| --- | --- |
+| `app.py` | Navegación, logo «Tarvia SOC», modo en la barra lateral. Oculta «Incidents» y «Prototip del back» salvo con `SOC_DEV=1`. |
+| `core/data.py` | Única puerta a los datos: `to_view`, `load_results`, `run_triage` (leer → agrupar → triar en paralelo, eventos para el kanban), `parse_alert_file` (salta líneas rotas), `refresh`, `suggest_ids`, aprobación/contención, LLM. |
+| `core/ui.py` | Etiquetas en lenguaje claro, colores validados para daltonismo, distintivos, matriz, tabla de entidades (listas, objetos `cloud`, texto `ai_session`), radio dibujado de la bandeja, tarjetas del kanban, `group_count`. |
+| `core/store.py` | SQLite con la decisión de la persona (quién, cuándo, si corrigió al sistema, nota). |
+| `views/inici.py` | Inici: qué es, flujo en 4 pasos, cifras, recorrido. |
+| `views/alertes.py` | Alertes: bandeja (botón «Actualitzar alertes», selección con radio, filtros, columna «Agrupa») + ficha (5 pasos, segunda opinión de las reglas, notas de la política, aviso de alertas agrupadas, plan de la IA, decisión). |
+| `views/informe_n2.py` | Informe per a N2 en formato Deloitte, validado y descargable; lleva todos los `alert_ids` del grupo. |
+| `views/accions_resposta.py` | Lista con un desplegable por alerta; ordenar (gravedad, fecha, pendientes, N2, tipo) y filtrar; aprobar/ejecutar (simulado en muestra). |
+| `views/triatge_directe.py` | Kanban en directo (varias en «Investigant», tarjetas agrupadas, avisos de alertas saltadas, tarjetas de escaladas con la gravedad nueva). |
+| `views/resum.py` | Cifras, gráficos, mapa de gravedad, SLA. |
+| `views/incidents.py`, `views/prototip_back.py` | Ocultas (solo `SOC_DEV=1`). Incidents solo tiene un incidente de ejemplo. |
 
-**Correlación de nivel 1 (8 nov).** `correlation.py` agrupa, ANTES del triaje y de la IA, las alertas que son el
-mismo evento repetido: misma regla, dentro de la ventana `SOC_DEDUP_WINDOW_MIN` (5 min por defecto, contada desde la
-primera; 0 la desactiva) y mismos datos clave (mismo sujeto —equipo, usuario, cliente o bucket— y mismo indicador
-—IP, dominio, remitente o hash— cuando las dos los tienen). La alerta agrupada conserva el id y la hora de la primera,
-une sin duplicados related_events y entidades, toma la gravedad de regla más alta y lleva `group` {count, alert_ids,
-first_seen, last_seen, window_min, shared_keys}. En todo el dataset salen 13 grupos (56 alertas); en la muestra de
-150, ninguno. Se ve en directo (kanban, ficha, columna «Agrupa») y el informe N2 lleva todos los alert_ids.
-Esto es deduplicación; agrupar alertas distintas de un mismo ataque (incidentes, nivel 2) sigue pendiente.
+### Datos, configuración y tests
 
-**Siguiente: agrupar alertas en incidentes (`incident_id`, política §6).** Ejemplo claro en la muestra: los tres
-accesos VPN de Logisoft (11, 18 y 25 de octubre, domingos de madrugada desde el mismo ASN) son un mismo incidente.
+- `data/fixture.json`: las 150 alertas triadas (modo muestra). `data/comparacion_veredictos.json`: IA vs reglas. `data/soc.db`: decisiones (no se sube).
+- `.env.example`: `SOC_API_URL`, `LLM_*`, `SOC_DEDUP_WINDOW_MIN`. `.streamlit/config.toml`: tema.
+- `tests/` (82): `test_correlation`, `test_verdict`, `test_rules`, `test_policy`, `test_triage`, `test_ingesta`, `test_front_pages`, `test_assistant`, `test_soc_api`. `conftest.py` fuerza `SOC_VERDICT_ENGINE=rules` (sin red).
+- Fuera del repo: `..\.claude\launch.json` con `front-streamlit` (8501, muestra), `front-directe` (8502, directo), `api-deloitte` (8000) y `fitxers-prova` (8090, sirve `03_alertas` para pruebas de subida).
+
+## 6. Cómo decide
+
+### 6.1 Correlación de nivel 1 (antes de la IA)
+Dos alertas son el mismo evento si tienen **la misma regla**, la segunda llega **dentro de la ventana contada desde la
+primera** (`SOC_DEDUP_WINDOW_MIN`, 5 min; 0 desactiva) y comparten **datos clave**: mismo sujeto (equipo, usuario,
+cliente o bucket) y mismo indicador (IP, dominio, remitente o hash) cuando las dos los tienen. La agrupada conserva
+id y hora de la primera, une sin duplicados `related_events` y entidades, toma la gravedad de regla más alta y lleva
+`group = {count, alert_ids, first_seen, last_seen, window_min, shared_keys}`. Dataset completo: 13 grupos (56 alertas)
+con 5 min; la muestra de 150 no tiene ninguno.
+
+### 6.2 Veredicto, gravedad y decisión (estable)
+1. **La IA propone solo el veredicto** (ataque real / autorizada / falsa alarma / falta información) y redacta.
+2. **Texto oculto** para el clasificador → siempre ataque real y escalar.
+3. **Gravedad** = matriz §2 (regla × activo más crítico) ± ajuste **calculado con hechos**, nunca con la opinión de la
+   IA: −1 si un control lo bloqueó, +1 si un runbook confirma acceso o ejecución, +1 VIP; máximo ±1. Autorizada o
+   falsa alarma → informativa o baja.
+4. **Cerrar/escalar** por reglas fijas: escalar si ataque real de gravedad media o más, falta información en media o
+   más, texto oculto, criterio obligatorio de un runbook (fraude, credenciales, ejecución…) o **conclusión dudosa**
+   (IA y reglas no coinciden en si es un ataque; la seguridad se limita al 50 %). El resto se cierra.
+5. **Acciones**: purgar correo y bloquear IOC sin aprobación; el resto N2; nada sobre OT; uso dual con N2.
+
+Calendario de cambios en **hora de España** (convertido a UTC). Si la IA falla, deciden las reglas.
+
+### 6.3 Defensa ante manipulación (`guard.py`)
+La base es de arquitectura: la IA solo propone y redacta; la política decide. Encima:
+1. **Limpieza antes de la IA** (`sanitize`): quita caracteres invisibles, normaliza letras disfrazadas (NFKC) y
+   neutraliza etiquetas falsas (`</datos_no_fiables>`, `SYSTEM:`, `<|…|>`). Detrás de los datos va un recordatorio.
+2. **Detector** en toda la alerta (no solo `evidence`), castellano/catalán/inglés. Dos tipos: `instruccio` (órdenes →
+   ataque real y escalar) y `ocultacio` (texto escondido → escalar). UC-AI-001: las frases del cliente al asistente
+   solo cuentan si van dirigidas al clasificador. Ver abajo.
+3. **Acciones**: un objetivo que no sale en los datos se descarta; bloquear un dominio propio, IP interna, equipo del
+   inventario, proveedor legítimo o servicio conocido pide N2; con cualquier sospecha, todo pide N2.
+4. **Citas**: si la IA cita CHG/tickets/IPs/correos que no existen, nota; y si con eso cierra, se escala.
+5. **Pantalla**: el texto de la IA se pinta sin imágenes (exfiltración), sin enlaces clicables ni HTML.
+El detector revisa también los registros relacionados (el texto completo del RAM scraper de los TPV, `ALR-20261020-011897..899`, solo está en el log del EDR). Dataset: 15 alertas trampa (12 correos + 3 TPV), 0 falsas alarmas.
+Tests: `tests/test_injection.py` (29 alertas trampa). Sobre las 138 alertas de escenario (ids ≥ 011785) la IA acierta 131/135 ataque sí/no y no cierra ningún ataque.
+
+## 7. Qué funciona (comprobado)
+
+- **Muestra (150)**: 127 cerradas y 23 escaladas; 65 ataques reales; activo afectado encontrado en 145/150; IA y reglas
+  coinciden en 134/150; 5 dudosas escaladas; todo en catalán y sin códigos internos.
+- **Estabilidad**: las mismas 10 alertas triadas 3 veces con la IA real dan la misma gravedad y decisión.
+- **Los 41 tipos de alerta** del dataset (20 fuera de la muestra), triados en directo: todas las pantallas, fichas e
+  informes funcionan; entidades `cloud` y `ai_session` bien mostradas.
+- **Subida de JSONL** (`alertas_100.jsonl`): 100 alertas en ~4,5 min con la IA, 4 a la vez; líneas rotas y alertas
+  desconocidas se saltan con aviso «X alertes s'han saltat per algun error» sin parar el lote.
+- **Correlación en directo**: 14 alertas → 7 casos (bucket ×5, pentest ×2, lateral ×2, SCCM ×2), una llamada a la IA
+  por grupo.
+- **Seguridad ante el atacante**: el texto de las alertas nunca se pinta como HTML; el correo
+  `ALR-20261020-011905` con texto oculto se detecta y se escala.
+
+## 8. Variables de entorno
+
+| Variable | Por defecto | Para qué |
+| --- | --- | --- |
+| `SOC_MODE` | `fixture` | `live` = modo directo |
+| `SOC_API_URL` | `http://127.0.0.1:8000` | API de Deloitte |
+| `SOC_WORKERS` | 4 | alertas triadas a la vez |
+| `SOC_DEDUP_WINDOW_MIN` | 5 | ventana de correlación (0 = sin agrupar) |
+| `SOC_VERDICT_ENGINE` | `auto` | `rules` = sin IA (rápido) |
+| `SOC_EXAMPLES` | 1 | `0` quita los campos de ejemplo (`incident_id`) |
+| `SOC_DEV` | 0 | `1` enseña «Incidents» y «Prototip del back» |
+| `LLM_PROVIDER/BASE_URL/API_KEY/MODEL` | pasarela UAB, `ornith` | IA |
+
+## 9. Bugs y limitaciones pendientes
+
+**Bugs conocidos**
+1. `SOC_MODE`, `SOC_EXAMPLES` y `SOC_WORKERS` **no se leen del `.env`**: `core/data.py` los lee al importarse, antes
+   de que se cargue el `.env`. Hoy solo funcionan como variable de entorno al arrancar. (`SOC_DEDUP_WINDOW_MIN` sí,
+   porque se lee en el momento.)
+2. En directo, **la IA a veces responde en castellano** pese al prompt; `plain_text` solo corrige códigos internos.
+   En la muestra se rehicieron a mano.
+3. `requirements.txt` **no incluye FastAPI ni uvicorn**: la API de Deloitte se arranca con el Python del sistema.
+
+**Limitaciones**
+4. En un caso de verdad dudoso, **la IA puede cambiar de veredicto entre sesiones** (p. ej. la subida a WeTransfer
+   `ALR-20261014-004075`); con el mismo veredicto el resultado ya es fijo. Mejora posible: votar 3 veces (3× lento).
+5. Los resultados en directo **viven en la sesión del navegador**: recargar la página los pierde.
+6. **Sin incidentes de nivel 2**: no se juntan alertas *distintas* del mismo ataque (ver §10).
+7. El kanban muestra las consultas al **terminar** cada alerta, no en tiempo real (falta `on_event` en el back).
+8. «Seguretat de la conclusió» es la **autoestimación de la IA** (o un valor fijo de la regla), no una probabilidad
+   calibrada.
+9. Las 10 alertas de ejemplo del directo son **siempre las mismas** (misma posición de la cola).
+10. Avisos de Streamlit por funciones obsoletas (`use_container_width`, `components.html`); funcionan, pero habrá
+    que cambiarlas al actualizar Streamlit.
+11. Casos discutibles para revisar a mano: túnel DNS hacia `e5.sk` (podría ser ESET); alguna regla muy concreta
+    heredada (`gestoria-pons.example`).
+12. Restos: `assets/deloitte_logo_blanco.png` ya no se usa; `docs/PLAN_FRONTEND.md` está desfasado.
+
+## 10. Siguiente paso exacto: incidentes de nivel 2
+
+**Qué es**: agrupar alertas **distintas** que forman parte del mismo ataque o incidente (política §6: «varias alertas
+sobre la misma intrusión se documentan en un único ticket»; §5: escalar cadenas de alertas leves). Es lo que la
+correlación de nivel 1 no hace a propósito, porque solo junta repeticiones de la misma regla en minutos.
+
+**Ejemplo de la muestra**: los tres accesos VPN de la cuenta del proveedor Logisoft (`ALR-20261011-011877`,
+`ALR-20261018-011879`, `ALR-20261025-011881`): domingos de madrugada, mismo origen ajeno, semanas distintas.
+
+**Plan previsto**:
+1. Módulo nuevo (p. ej. `incidents.py`) que, **después del triaje**, junte casos que compartan sujeto o indicador
+   (usuario, equipo, IP, dominio, bucket…) en una ventana larga configurable (días), aunque sean reglas distintas,
+   priorizando los que tienen ataque real o conclusión dudosa.
+2. Rellenar `incident_id` en cada vista (el contrato del front ya lo tiene) y quitar el incidente de ejemplo.
+3. Volver a mostrar la página **Incidents** (hoy oculta): tarjeta por incidente, entidades compartidas y línea temporal
+   MITRE (ya hecha por Adri en `views/incidents.py`).
+4. Informe N2 por incidente con todos los `alert_ids` (formato §6) y escalado del incidente si la cadena lo justifica.
+5. Tests y regenerar la muestra.
+
+**Otros pendientes para la defensa**: probar en directo con alertas nuevas justo antes, preparar el guion de la demo
+y ensayarlo, y decidir con el equipo los casos discutibles del §9.

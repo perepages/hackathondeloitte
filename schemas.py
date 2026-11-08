@@ -52,6 +52,7 @@ class RecommendedAction(BaseModel):
 class InjectionFlag(BaseModel):
     field: str
     excerpt: str
+    kind: str = "instruccio"  # instruccio: órdenes al sistema · ocultacio: texto escondido a la persona
 
 
 class TriagePreview(BaseModel):

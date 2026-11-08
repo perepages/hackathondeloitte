@@ -5,11 +5,14 @@ Tres capas, en este orden:
   2. Red de seguridad: si no hay LLM, falla o devuelve algo inválido, el motor de reglas (rules.py: runbooks de
      Marc corregidos + reglas por caso de uso). Con el LLM, las reglas quedan como segunda opinión visible.
   3. Política SOC encima, SIEMPRE (la propuesta nunca la salta):
-     - texto dirigido a nuestro clasificador (inyección) → true_positive y escalar;
+     - texto dirigido a nuestro clasificador (inyección, guard.py) → true_positive y escalar; texto escondido o
+       sospecha de la IA → escalar y ninguna acción automática;
      - gravedad = matriz ± 1 como máximo (VIP/privilegiado, ejecución, bloqueado…); actividad autorizada o
        falsa alarma → informational o low;
      - escalado obligatorio (true_positive high/critical, needs_more_info medium o más);
-     - aprobación N2 para todo salvo purgar correo y bloquear IOC; nada sobre la red OT; uso dual con N2.
+     - aprobación N2 para todo salvo purgar correo y bloquear IOC; nada sobre la red OT; uso dual con N2;
+     - las acciones solo apuntan a valores que salen en los datos (nunca a algo que se invente la IA) y bloquear
+       algo propio de la empresa o un servicio legítimo requiere N2.
 
 SOC_VERDICT_ENGINE: auto (LLM y, si falla, reglas; por defecto) | llm (igual, para dejarlo explícito) | rules.
 """
@@ -18,6 +21,7 @@ from __future__ import annotations
 import os
 import re
 
+import guard
 from policy import SEVERITY_CA, SEVERITY_ORDER, apply_severity_adjustment
 from schemas import InjectionFlag, RecommendedAction, TriagePreview
 
@@ -27,11 +31,9 @@ ACTIONS = ("purge_email", "block_ioc", "revoke_sessions", "reset_password", "iso
 NO_APPROVAL = {"purge_email", "block_ioc", "escalate", "close"}
 DUAL_USE = ("mega.nz", "mega.io", "anydesk.com", "teamviewer.com", "dropbox.com", "wetransfer.com")
 
-# Solo texto dirigido a NUESTRO clasificador (no los prompts de clientes al asistente de compra,
-# que son el objeto de la propia alerta UC-AI-001).
-INJECTION = re.compile(
-    r"(display\s*:\s*none|sistema automatizado|clasificaci[oó]n de seguridad|clasificar como|no escalar|"
-    r"marcar como (false_positive|falso positivo))", re.I)
+BENIGN_DOMAINS = ("microsoft.com", "office.com", "office365.com", "outlook.com", "live.com", "windows.net",
+                  "windowsupdate.com", "google.com", "googleapis.com", "gstatic.com", "amazonaws.com",
+                  "cloudfront.net", "akamaized.net", "azureedge.net", "apple.com", "github.com")
 
 
 def engine() -> str:
@@ -41,13 +43,7 @@ def engine() -> str:
 
 # ----------------------------------------------------------------------------- detección de inyección
 
-def injection_flags(alert: dict) -> list[dict]:
-    flags = []
-    for key, value in (alert.get("evidence") or {}).items():
-        if isinstance(value, str) and (m := INJECTION.search(value)):
-            start = max(0, m.start() - 40)
-            flags.append({"field": f"evidence.{key}", "excerpt": value[start:start + 160]})
-    return flags
+injection_flags = guard.injection_flags  # en guard.py: castellano, catalán, inglés, texto escondido, tinta invisible
 
 
 # ----------------------------------------------------------------------------- reglas (red de seguridad)
@@ -154,12 +150,10 @@ def llm_proposal(preview: dict) -> dict:
 # ----------------------------------------------------------------------------- política
 
 def _severity(verdict: str, matrix: str, matrix_rationale: str, vip: bool, adjustment: int) -> tuple[str, str]:
-    # Removed verdict-based early return; severity is now based solely on matrix and adjustments
-
-
-
-    if verdict in ("benign_true_positive", "false_positive"):
-        return "informational", f"veredicto {verdict} → informational (política §2)"
+    if verdict in ("benign_true_positive", "false_positive"):  # política §2: informativa o, como mucho, baja
+        severity = "informational" if matrix in ("informational", "low") else "low"
+        label = "activitat autoritzada" if verdict == "benign_true_positive" else "falsa alarma"
+        return severity, f"{matrix_rationale} Conclusió: {label} → {SEVERITY_CA[severity]} (política del SOC §2)."
     total = max(-1, min(1, (1 if vip else 0) + adjustment))
     severity = apply_severity_adjustment(matrix, total)
     reasons = []
@@ -197,7 +191,19 @@ def _targets(action: str, target: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def _actions(raw: list, decision: str, ot: set[str], notes: list[str]) -> list[dict]:
+def _legit_domains(alert: dict) -> tuple[str, ...]:
+    ev = alert.get("evidence") or {}
+    own = [str(v).lower() for k, v in ev.items() if k.startswith("legit") and isinstance(v, str) and "." in v]
+    return BENIGN_DOMAINS + DUAL_USE + tuple(own)
+
+
+def _actions(raw: list, decision: str, ot: set[str], notes: list[str], preview: dict | None = None,
+             suspicious: bool = False) -> list[dict]:
+    """Acciones finales. Defensa ante manipulación: un objetivo que no sale en los datos se descarta; bloquear algo
+    de la empresa o un servicio legítimo pide N2; y si hay sospecha de manipulación, todo pide N2."""
+    preview = preview or {}
+    corpus = guard.known_corpus(preview) if preview else ""
+    legit = _legit_domains(preview.get("alert") or {})
     out, seen = [], set()
     expanded = []
     for item in raw or []:
@@ -217,11 +223,22 @@ def _actions(raw: list, decision: str, ot: set[str], notes: list[str]) -> list[d
         if target in ot:
             notes.append(f"Es descarta «{action}» sobre {target}: és a la xarxa OT; només s'avisa Operacions.")
             continue
+        if action not in ("escalate", "close") and corpus and not guard.appears_in(target, corpus):
+            notes.append(f"Es descarta «{action}» sobre «{target[:80]}»: no apareix a les dades de l'alerta "
+                         "(no s'actua mai sobre un objectiu que no surti a les evidències).")
+            continue
         approval = action not in NO_APPROVAL
         why = str(item.get("justification") or "").strip()
         if action == "block_ioc" and any(target == d or target.endswith("." + d) for d in DUAL_USE):
             approval = True
             why += " Servei legítim d'ús dual: bloquejar-lo per a tota l'empresa requereix N2."
+        elif action == "block_ioc" and (reason := guard.protected_reason(target, preview, legit)):
+            approval = True
+            why += f" No es bloqueja automàticament: {reason}; ho ha de confirmar N2."
+            notes.append(f"Bloquejar {target} requereix N2: {reason}.")
+        if suspicious and approval is False and action not in ("escalate", "close"):
+            approval = True
+            why += " Possible intent de manipulació a l'alerta: cap acció automàtica, ho confirma N2."
         if (action, target) in seen:
             continue
         seen.add((action, target))
@@ -268,7 +285,10 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
     proposed_decision = proposal["decision"]
     justification = proposal["justification"]
     confidence = proposal["confidence"]
-    flags = injection_flags(alert)
+    all_flags = injection_flags(alert, data.get("related_logs"))  # también los registros: llegan a la IA
+    flags = [f for f in all_flags if f.get("kind") == "instruccio"]  # órdenes al sistema: fuerzan la conclusión
+    hidden = [f for f in all_flags if f.get("kind") == "ocultacio"]  # texto escondido a la persona: se escala
+    llm_suspects = proposal.get("injection_detected") is True
     if flags:
         if verdict != "true_positive":
             notes.append("Text ocult adreçat al sistema de classificació: es força «atac real» i escalar.")
@@ -276,8 +296,18 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
         verdict = "true_positive"
         justification = ("L'alerta conté text adreçat al sistema automàtic de classificació "
                          "(intent de manipulació). " + justification)
-    elif proposal.get("injection_detected"):
-        notes.append("La IA creu que les dades intenten manipular-la; cal revisar el text de l'alerta.")
+    elif llm_suspects:
+        notes.append("La IA creu que les dades intenten manipular-la: s'escala perquè ho revisi una persona.")
+    suspicious = bool(all_flags) or llm_suspects
+
+    # La IA no puede justificarse con datos que no existen (p. ej. un «cambio aprobado» que solo sale en su texto)
+    invented = []
+    if source == "llm":
+        invented = guard.unsupported_refs([proposal["title"], proposal["summary"], justification],
+                                          guard.known_corpus(data))
+        if invented:
+            notes.append("La IA cita dades que no apareixen enlloc de l'alerta ni de les evidències: "
+                         + ", ".join(invented[:5]) + ". No s'han de prendre com a certes.")
 
     # Opción 2: la IA y las reglas no coinciden en si es un ataque -> conclusión dudosa, la revisa una persona
     attack = lambda v: {"true_positive": True, "benign_true_positive": False, "false_positive": False}.get(v)  # noqa
@@ -289,10 +319,16 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
 
     severity, rationale = _severity(verdict, matrix_severity, matrix_rationale, privileged_identity,
                                     fact_adjustment(alert, verdict, rules_view, flags))
-    
+
     reasons = []
     if flags:
         reasons.append("intent de manipulació del classificador")
+    elif hidden:
+        reasons.append("l'alerta conté text amagat a la persona (possible manipulació)")
+    elif llm_suspects:
+        reasons.append("la IA detecta un possible intent de manipulació a les dades")
+    if invented and verdict in ("benign_true_positive", "false_positive"):
+        reasons.append("la IA justifica el tancament amb dades que no apareixen a l'alerta")
     if doubtful:
         reasons.append(f"la IA i les regles dels runbooks no coincideixen (IA: {_label(verdict)}; regles: "
                        f"{_label(rules_view['verdict'])}): conclusió dubtosa")
@@ -316,7 +352,7 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
     raw_actions = proposal["recommended_actions"]
     if raw_actions is None:  # reglas: acciones típicas del caso de uso
         raw_actions = default_actions(alert, verdict, decision == "escalate")
-    actions = _actions(raw_actions, decision, _ot_hosts(data), notes)
+    actions = _actions(raw_actions, decision, _ot_hosts(data), notes, preview=data, suspicious=suspicious)
 
     open_questions = list(preview.open_questions)
     if verdict == "needs_more_info":
@@ -330,7 +366,7 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
         "justification": justification,
         "decision": decision,
         "recommended_actions": [RecommendedAction(**a) for a in actions],
-        "injection_flags": [InjectionFlag(**f) for f in flags],
+        "injection_flags": [InjectionFlag(**f) for f in all_flags],
         "title": proposal["title"] or f"{alert.get('rule_name')}",
         "summary": proposal["summary"] or justification,
         "decision_source": source,

@@ -26,7 +26,8 @@ def test_llm_propone_y_la_politica_corrige_gravedad_de_actividad_autorizada(monk
     _llm(monkeypatch, {"verdict": "benign_true_positive", "confidence": 0.9, "decision": "close",
                        "title": "Inventario SCCM", "summary": "Cambio aprobado.", "justification": "CHG-1",
                        "recommended_actions": [{"action": "close", "target": "ticket"}]})
-    out = _decide(_preview(rule_id="UC-EDR-002"), matrix="high", vip=True)
+    change = ContextRecord(kind="change", key="CHG-1", data={"change_id": "CHG-1"})  # el cambio que cita existe
+    out = _decide(_preview(rule_id="UC-EDR-002", contexts=[change]), matrix="high", vip=True)
     assert out.decision_source == "llm"
     assert out.verdict == "benign_true_positive" and out.decision == "close"
     assert out.severity == "low"  # autorizada: informational o low, aunque la matriz diga high
@@ -79,7 +80,8 @@ def test_aprobaciones_y_red_ot(monkeypatch):
                            {"action": "block_ioc", "target": "evil.example"},
                            {"action": "block_ioc", "target": "mega.nz"},
                            {"action": "borrar_todo", "target": "x"}]})
-    out = _decide(_preview(contexts=[ot]))
+    out = _decide(_preview(contexts=[ot], entities={"hosts": [{"hostname": "WS-1"}, {"hostname": "PLC-01"}],
+                                                    "domains": ["evil.example", "mega.nz"]}))
     acts = {(a.action, a.target): a.requires_approval for a in out.recommended_actions}
     assert ("isolate_host", "PLC-01") not in acts  # nunca sobre OT
     assert acts[("isolate_host", "WS-1")] is True

@@ -155,10 +155,21 @@ def render_detail(r: dict, scroll: bool) -> None:
                 f"Alertes: {', '.join(g['alert_ids'])}.", icon=":material/stacks:")
 
     if r["injection_flags"]:
-        st.error("**Intent d'enganyar el sistema.** El contingut d'aquesta alerta inclou instruccions adreçades a "
-                 "la classificació automàtica. No s'han obeït: l'alerta es tracta com a més sospitosa, no menys.",
-                 icon=":material/gpp_bad:")
-        for f in r["injection_flags"]:
+        orders = [f for f in r["injection_flags"] if f.get("kind", "instruccio") == "instruccio"]
+        if orders:
+            st.error("**Intent d'enganyar el sistema.** El contingut d'aquesta alerta inclou instruccions adreçades "
+                     "a la classificació automàtica. No s'han obeït: l'alerta es tracta com a més sospitosa, no "
+                     "menys, i cap acció s'executa sense aprovació.", icon=":material/gpp_bad:")
+        else:
+            st.warning("**Text amagat.** Aquesta alerta conté text que no es veu a primera vista (estils ocults, "
+                       "comentaris o caràcters invisibles). S'escala i cap acció s'executa sense aprovació.",
+                       icon=":material/visibility_off:")
+        shown = set()
+        for f in orders + [f for f in r["injection_flags"] if f not in orders]:  # un fragmento por campo
+            if f["field"] in shown:
+                continue
+            shown.add(f["field"])
+            st.caption(f"On: {ui.md(f['field'])}")
             st.code(f["excerpt"], language=None, wrap_lines=True)
 
     left, right = st.columns([6, 5], gap="large")

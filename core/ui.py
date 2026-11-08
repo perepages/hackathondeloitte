@@ -203,8 +203,10 @@ def empty_state(what: str) -> None:
 
 
 def llm_md(text: str) -> str:
-    """Texto del LLM para st.markdown: los títulos (#) pasan a negrita para no romper la jerarquía de la página."""
-    return re.sub(r"^\s*#{1,6}\s*(.+?)\s*#*\s*$", r"**\1**", text or "", flags=re.M)
+    """Texto del LLM para st.markdown: los títulos (#) pasan a negrita para no romper la jerarquía de la página, y
+    sin imágenes, enlaces clicables ni HTML (una IA manipulada podría sacar datos fuera con una imagen remota)."""
+    from guard import safe_llm_markdown
+    return re.sub(r"^\s*#{1,6}\s*(.+?)\s*#*\s*$", r"**\1**", safe_llm_markdown(text or ""), flags=re.M)
 
 
 def fmt_time(iso: str) -> str:
