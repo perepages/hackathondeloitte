@@ -1,10 +1,8 @@
-"""Incidentes: varias alertas del mismo ataque agrupadas (niveles 2-3, solo si hay tiempo).
+"""Incidents (nivel 2): alertas DISTINTAS de la misma intrusión, en un único ticket (política del SOC §5 y §6).
 
-Dueño: PERSONA B. Esqueleto: agrupa por incident_id. En el fixture hay un incidente de ejemplo
-(INC-EJ-001: dos correos del mismo proveedor falso con texto oculto para el clasificador).
-Pendiente:
-  - TODO B: tarjeta de incidente (entidades compartidas, severidad máxima).
-  - TODO B: línea temporal del incidente con fases MITRE (Altair).
+La agrupación la hace el back (incidents.py) al cargar los resultados. Esta página explica cada incidente: por qué se han
+juntado sus alertas (las pistas compartidas), por qué se escala, en qué orden pasó (línea temporal MITRE, de Adri) y
+lleva al informe para N2, que es uno por incidente.
 """
 from __future__ import annotations
 
@@ -14,139 +12,91 @@ import streamlit as st
 
 from core import data, ui
 
-SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1, "informational": 0}
+TACTICS = ["Reconnaissance", "Resource Development", "Initial Access", "Execution", "Persistence",
+           "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement",
+           "Collection", "Command and Control", "Exfiltration", "Impact", "Desconeguda"]
 
 st.title("Incidents")
+st.markdown('<p class="muted">Un incident junta alertes <b>diferents</b> que formen part del mateix atac, encara que '
+            "passin dies entre elles: el mateix atacant (IP, domini, remitent, fitxer), el mateix compte o el mateix "
+            "equip. Així l'analista sènior rep <b>un sol informe</b> per atac i es veuen cadenes que alerta per alerta "
+            "semblarien poca cosa (política del SOC §5 i §6).</p>", unsafe_allow_html=True)
+
 rows = data.load_results()
-groups: dict[str, list] = {}
-for r in rows:
-    if r["incident_id"]:
-        groups.setdefault(r["incident_id"], []).append(r)
+if not rows:
+    ui.empty_state("incidents")
+incs = data.load_incidents()
+if not incs:
+    st.info("No hi ha alertes d'atac que comparteixin pistes: cap incident.", icon=":material/info:")
+    st.stop()
 
-if not groups:
-    st.info("Encara no hi ha incidents: el back no agrupa alertes.")
+in_inc = sum(i["count"] for i in incs)
+m = st.columns(4)
+m[0].metric("Incidents", len(incs))
+m[1].metric("Alertes", in_inc, help="Alertes que formen part d'algun incident (comptant les repeticions)")
+m[2].metric("Informes estalviats", in_inc - len(incs),
+            help="Sense agrupar, cada alerta seria un informe per al N2; agrupades, un per incident")
+m[3].metric("Cadenes", sum(1 for i in incs if i["chain"]),
+            help="Dues o més regles diferents amb conclusió d'atac: s'escalen sempre (política §5)")
 
-
-def _shared_entities(alerts: list[dict]) -> dict:
-    """Devuelve listas de entidades (hosts, users, IPs, dominios) compartidas entre ≥2 alertas."""
-    from collections import Counter
-    hosts: Counter = Counter()
-    users: Counter = Counter()
-    ips: Counter = Counter()
-    domains: Counter = Counter()
-    for a in alerts:
-        ent = a["alert"].get("entities") or {}
-        for h in ent.get("hosts") or []:
-            if h.get("hostname"):
-                hosts[h["hostname"]] += 1
-            if h.get("ip"):
-                ips[h["ip"]] += 1
-        for u in ent.get("users") or []:
-            if u.get("username"):
-                users[u["username"]] += 1
-        for d in ent.get("domains") or []:
-            if isinstance(d, str):
-                domains[d] += 1
-            elif isinstance(d, dict) and d.get("domain"):
-                domains[d["domain"]] += 1
-    n = len(alerts)
-    return {
-        "hosts": [k for k, c in hosts.items() if c >= min(2, n)],
-        "users": [k for k, c in users.items() if c >= min(2, n)],
-        "ips": [k for k, c in ips.items() if c >= min(2, n)],
-        "domains": [k for k, c in domains.items() if c >= min(2, n)],
-    }
+with st.expander("Com s'agrupen les alertes"):
+    st.markdown(
+        "- **Pista d'atacant** (IP externa, domini, fitxer, remitent, correu, sessió de l'assistent): uneix alertes de "
+        "tot el període.\n"
+        "- **Mateix compte**: alertes a menys de 14 dies l'una de l'altra.\n"
+        "- **Mateix equip**: alertes a menys de 48 hores (la política demana correlacionar ±24 h).\n"
+        "- **No uneixen**: la gravetat, la criticitat ni el tipus d'alerta; els dominis propis i els serveis "
+        "legítims; i les pistes massa populars (un servidor de salt o un remitent de butlletins).\n"
+        "- **Només entren** les alertes d'atac, amb dades que falten o escalades: l'activitat autoritzada no fa "
+        "incidents.\n"
+        "- **S'escala** si alguna alerta ja s'escalava o si és una cadena (dues o més regles diferents d'atac).")
 
 
-def _max_severity(alerts: list[dict]) -> str:
-    return max((a.get("severity") or "informational" for a in alerts),
-               key=lambda s: SEVERITY_RANK.get(s, 0), default="informational")
-
-
-def _mitre_timeline(alerts: list[dict]) -> None:
-    """Línea temporal Altair con las fases MITRE del incidente."""
-    rows_t = []
-    for a in alerts:
-        mitre = a["alert"].get("mitre") or {}
-        tactic = mitre.get("tactic") or "Desconocida"
-        technique = mitre.get("technique") or ""
-        rows_t.append({
-            "Hora": a["created_at"][:16],
-            "ID": a["alert_id"],
-            "Táctica": tactic,
-            "Técnica": technique,
-        })
-    if not rows_t:
-        return
-    df_t = pd.DataFrame(rows_t)
-    tactics_order = [
-        "Reconnaissance", "Resource Development", "Initial Access", "Execution",
-        "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access",
-        "Discovery", "Lateral Movement", "Collection", "Command and Control",
-        "Exfiltration", "Impact", "Desconocida",
-    ]
-    chart = (
-        alt.Chart(df_t)
-        .mark_circle(size=120)
-        .encode(
-            x=alt.X("Hora:T", title="Hora"),
-            y=alt.Y("Táctica:N", sort=tactics_order, title="Fase MITRE"),
-            color=alt.Color("Táctica:N", legend=None),
-            tooltip=["Hora", "ID", "Táctica", "Técnica"],
-        )
-        .properties(height=max(120, len(df_t["Táctica"].unique()) * 35))
-    )
+def _timeline(members: list[dict]) -> None:
+    df = pd.DataFrame([{"Hora": r["created_at"][:19], "Alerta": r["alert_id"], "Què": r["rule_name"],
+                        "Fase": (r["alert"].get("mitre") or {}).get("tactic") or "Desconeguda",
+                        "Tècnica": (r["alert"].get("mitre") or {}).get("technique") or "",
+                        "Gravetat": ui.SEVERITY_LABEL.get(r["severity"], r["severity"])} for r in members])
+    chart = (alt.Chart(df).mark_circle(size=140)
+             .encode(x=alt.X("Hora:T", title=None),
+                     y=alt.Y("Fase:N", sort=TACTICS, title=None, axis=alt.Axis(labelLimit=170)),
+                     color=alt.Color("Fase:N", legend=None),
+                     tooltip=["Hora", "Alerta", "Què", "Fase", "Tècnica", "Gravetat"])
+             .properties(height=max(150, df["Fase"].nunique() * 50),
+                         title="Fases de l'atac (MITRE) al llarg del temps"))
     st.altair_chart(chart, use_container_width=True)
 
 
-for inc, alerts in groups.items():
-    example = any("incident_id" in a["example_fields"] for a in alerts)
-    max_sev = _max_severity(alerts)
-    shared = _shared_entities(alerts)
+def _value(clue: dict) -> str:
+    v = clue["value"].replace("`", "")
+    if clue["kind"] == "equip" and not v.replace(".", "").isdigit():
+        v = v.upper()
+    return v[:16] + "…" if clue["kind"] == "hash" else v[:60]
 
-    # ── Tarjeta de incidente ──────────────────────────────────────────────────
+
+focus = st.session_state.pop("focus_incident", None)
+for inc in incs:
+    _, members = data.get_incident(inc["incident_id"])
     with st.container(border=True):
-        col_title, col_badge = st.columns([4, 1])
-        with col_title:
-            st.markdown(
-                f"#### {inc} · {len(alerts)} alertes"
-                + (" &nbsp;<span class='ej'>dada d'exemple</span>" if example else ""),
-                unsafe_allow_html=True,
-            )
-        with col_badge:
-            st.markdown(
-                f"Gravetat màx.: {ui.severity_badge(max_sev)}",
-                unsafe_allow_html=True,
-            )
-
-        # Entidades compartidas
-        ent_parts = []
-        if shared["hosts"]:
-            ent_parts.append("**Equips:** " + ", ".join(f"`{str(h).replace('`', '')}`" for h in shared["hosts"]))
-        if shared["users"]:
-            ent_parts.append("**Usuaris:** " + ", ".join(f"`{str(u).replace('`', '')}`" for u in shared["users"]))
-        if shared["ips"]:
-            ent_parts.append("**IPs:** " + ", ".join(f"`{str(ip).replace('`', '')}`" for ip in shared["ips"]))
-        if shared["domains"]:
-            ent_parts.append("**Dominis:** " + ", ".join(f"`{str(d).replace('`', '')}`" for d in shared["domains"]))
-        if ent_parts:
-            st.markdown("**Entitats compartides:** " + " · ".join(ent_parts))
-        else:
-            st.caption("No s'han detectat entitats compartides.")
-
-        # Tabla resumen de alertas
-        st.dataframe(
-            pd.DataFrame([{
-                "Hora": ui.fmt_time(a["created_at"]),
-                "ID": a["alert_id"],
-                "Regla": a["rule_name"],
-                "Veredicte": ui.VERDICT_LABEL[a["verdict"]],
-                "Gravetat": ui.SEVERITY_LABEL.get(a.get("severity", ""), a.get("severity", "")),
-            } for a in alerts]),
-            hide_index=True,
-            use_container_width=True,
-        )
-
-        # Línea temporal MITRE
-        st.markdown("**Línia temporal (fases MITRE)**")
-        _mitre_timeline(alerts)
+        st.markdown(f"{ui.severity_badge(inc['severity'])} &nbsp; {ui.decision_badge(inc['decision'])} &nbsp; "
+                    f"<span class='muted'>{ui.esc(inc['incident_id'])} · {ui.fmt_time(inc['first_seen'])} → "
+                    f"{ui.fmt_time(inc['last_seen'])}</span>", unsafe_allow_html=True)
+        st.subheader(inc["title"], anchor=False)
+        clues = " · ".join(f"**{ui.md(s['label'])}** `{_value(s)}`" for s in inc["shared"][:8])
+        st.markdown(f"**Per què són el mateix atac:** comparteixen {clues}"
+                    + (f" i {len(inc['shared']) - 8} pistes més" if len(inc["shared"]) > 8 else "") + ".")
+        if inc["reasons"]:
+            st.markdown("**Per què s'escala:** " + "; ".join(ui.md(x) for x in inc["reasons"]) + ".")
+        with st.expander(f"Les {inc['count']} alertes i la línia temporal", expanded=focus == inc["incident_id"]):
+            st.dataframe(pd.DataFrame([{
+                "Hora": ui.fmt_time(r["created_at"]), "Alerta": r["alert_id"], "Què ha detectat": r["rule_name"],
+                "Conclusió": ui.VERDICT_LABEL[r["verdict"]],
+                "Gravetat": ui.SEVERITY_LABEL.get(r["severity"], r["severity"]),
+                "Proposta": ui.DECISION_LABEL[r["decision"]]
+                + (" (per l'incident)" if r.get("escalated_by_incident") else ""),
+                "Repeticions": ui.group_count(r)} for r in members]), hide_index=True, use_container_width=True)
+            _timeline(members)
+        if st.button("Veure l'informe per a N2 d'aquest incident", key=f"inc_{inc['incident_id']}",
+                     icon=":material/description:"):
+            st.session_state["selected_alert"] = members[0]["alert_id"]
+            st.switch_page("views/informe_n2.py")

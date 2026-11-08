@@ -8,8 +8,8 @@ Datos: por defecto lee data/fixture.json (no hace falta la API). Para el back re
 Páginas y dueños (los nombres de menú son para el público; el dueño solo se ve aquí):
   A: inici, alertes, informe_n2, accions_resposta   ·   B: triatge_directe, resum, incidents   ·   back: prototip_back
 (el nombre de cada fichero es el de su página en el menú)
-Fuera del menú de la demo (siguen en views/): prototip_back (primera app del back) e incidents (hasta que el back
-agrupe alertas de verdad; hoy solo hay un incidente de ejemplo). SOC_DEV=1 los vuelve a enseñar.
+Fuera del menú de la demo (sigue en views/): prototip_back (primera app del back). SOC_DEV=1 la vuelve a enseñar.
+Incidents ya está en el menú: los incidentes los calcula el back de verdad (incidents.py).
 """
 import os
 
@@ -28,6 +28,7 @@ pages = {
     "Revisar alertes": [
         st.Page("views/alertes.py", title="Alertes", icon=":material/inbox:"),
         st.Page("views/informe_n2.py", title="Informe per a N2", icon=":material/description:"),
+        st.Page("views/incidents.py", title="Incidents", icon=":material/hub:"),
         st.Page("views/accions_resposta.py", title="Accions de resposta", icon=":material/shield:"),
     ],
     "Visió de conjunt": [
@@ -36,7 +37,6 @@ pages = {
     ],
 }
 if DEV:
-    pages["Visió de conjunt"].append(st.Page("views/incidents.py", title="Incidents", icon=":material/hub:"))
     pages["Equip tècnic"] = [st.Page("views/prototip_back.py", title="Prototip del back", icon=":material/build:")]
 pg = st.navigation(pages)
 

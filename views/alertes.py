@@ -117,7 +117,9 @@ def render_list() -> bool:
         "Origen": r["source_product"],
         "Quan": ui.fmt_time(r["created_at"])[5:16],
         "Agrupa": f"{ui.group_count(r)} alertes" if ui.group_count(r) > 1 else "",
-    } for r in filt], columns=[" ", "Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan", "Agrupa"])
+        "Incident": f"{r['incident']['count']} alertes" if r.get("incident") else "",
+    } for r in filt], columns=[" ", "Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan", "Agrupa",
+                               "Incident"])
     st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
                  height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-cell",
                  key="cola_tabla",
@@ -153,6 +155,15 @@ def render_detail(r: dict, scroll: bool) -> None:
                 f"{g.get('window_min', 5):g} minuts, de {ui.fmt_time(g.get('first_seen', ''))[11:16]} a "
                 f"{ui.fmt_time(g.get('last_seen', ''))[11:16]}. S'han analitzat una sola vegada. "
                 f"Alertes: {', '.join(g['alert_ids'])}.", icon=":material/stacks:")
+
+    if inc := r.get("incident"):
+        st.info(f"**Forma part de l'incident {inc['incident_id']}**: {ui.md(inc['title'])}. "
+                + ("S'escala per l'incident (cadena d'atac, política §5), encara que sola es tancaria. "
+                   if r.get("escalated_by_incident") else "")
+                + "L'informe per a N2 és un de sol per a tot l'incident.", icon=":material/hub:")
+        if st.button("Veure l'incident", key=f"to_inc_{r['alert_id']}", icon=":material/hub:"):
+            st.session_state["focus_incident"] = inc["incident_id"]
+            st.switch_page("views/incidents.py")
 
     if r["injection_flags"]:
         orders = [f for f in r["injection_flags"] if f.get("kind", "instruccio") == "instruccio"]

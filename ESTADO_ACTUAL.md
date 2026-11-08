@@ -1,6 +1,6 @@
 # Estado actual del proyecto · Triaje N1 Tarvia (reto Deloitte × UAB The Hack)
 
-8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **112 tests en verde** · Streamlit 1.65
+8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **130 tests en verde** · Streamlit 1.65
 
 ## 1. En una frase
 
@@ -84,6 +84,7 @@ el modo: «Mostra de 150 alertes del repte» o «Connectat a l'API del SOC».
 | `policy.py` | Matriz de gravedad §2 (comprobada celda a celda contra `politica_soc.md`), ajuste ±1, activo afectado cuando la alerta no trae equipo (`service_assets`, `cloud_asset`), nombres en catalán (`SEVERITY_CA`, `criticality_ca`). | Marc + nuestro |
 | `triage.py` | `analyze_alert(alert_id, decide=True, alert=None)`: recoge evidencias y calcula la gravedad base. Busca el activo afectado (equipo → puesto del usuario → servicio/bucket) y los cambios citados en la evidencia (`CHG-…`). | Marc + nuestro |
 | `correlation.py` | **Correlación / deduplicación de nivel 1** (ver §6.1). | nuestro (8 nov) |
+| `incidents.py` | **Incidentes de nivel 2** (ver §6.4): alertas distintas de la misma intrusión, un ticket. | nuestro (8 nov) |
 | `verdict.py` | `decide()`: une IA + reglas + política (ver §6.2). También `plain_text` (quita códigos internos de los textos de la IA), `fact_adjustment`, `blocked_by_control`, normalización de acciones. | nuestro |
 | `guard.py` | **Defensa ante manipulación (prompt injection)**, ver §6.3: limpieza antes de la IA, detector ampliado, objetivos de acciones, citas inventadas, Markdown seguro. | nuestro (8 nov) |
 | `rules.py` | Motor de reglas: runbooks RB-01…RB-10 de Marc **con 9 errores corregidos** + reglas por caso de uso + regla nueva RB-03 de VPN de proveedor. Respaldo si falla la IA y segunda opinión visible. | Marc (lógica) + nuestro |
@@ -95,7 +96,7 @@ el modo: «Mostra de 150 alertes del repte» o «Connectat a l'API del SOC».
 
 | Archivo | Página / función |
 | --- | --- |
-| `app.py` | Navegación, logo «Tarvia SOC», modo en la barra lateral. Oculta «Incidents» y «Prototip del back» salvo con `SOC_DEV=1`. |
+| `app.py` | Navegación, logo «Tarvia SOC», modo en la barra lateral. Oculta «Prototip del back» salvo con `SOC_DEV=1`. |
 | `core/data.py` | Única puerta a los datos: `to_view`, `load_results`, `run_triage` (leer → agrupar → triar en paralelo, eventos para el kanban), `parse_alert_file` (salta líneas rotas), `refresh`, `suggest_ids`, aprobación/contención, LLM. |
 | `core/ui.py` | Etiquetas en lenguaje claro, colores validados para daltonismo, distintivos, matriz, tabla de entidades (listas, objetos `cloud`, texto `ai_session`), radio dibujado de la bandeja, tarjetas del kanban, `group_count`. |
 | `core/store.py` | SQLite con la decisión de la persona (quién, cuándo, si corrigió al sistema, nota). |
@@ -105,7 +106,8 @@ el modo: «Mostra de 150 alertes del repte» o «Connectat a l'API del SOC».
 | `views/accions_resposta.py` | Lista con un desplegable por alerta; ordenar (gravedad, fecha, pendientes, N2, tipo) y filtrar; aprobar/ejecutar (simulado en muestra). |
 | `views/triatge_directe.py` | Kanban en directo (varias en «Investigant», tarjetas agrupadas, avisos de alertas saltadas, tarjetas de escaladas con la gravedad nueva). |
 | `views/resum.py` | Cifras, gráficos, mapa de gravedad, SLA. |
-| `views/incidents.py`, `views/prototip_back.py` | Ocultas (solo `SOC_DEV=1`). Incidents solo tiene un incidente de ejemplo. |
+| `views/incidents.py` | Incidents: tarjeta por incidente (pistas compartidas, por qué se escala), tabla y línea temporal MITRE (de Adri). |
+| `views/prototip_back.py` | Oculta (solo `SOC_DEV=1`). |
 
 ### Datos, configuración y tests
 
@@ -136,6 +138,20 @@ con 5 min; la muestra de 150 no tiene ninguno.
 5. **Acciones**: purgar correo y bloquear IOC sin aprobación; el resto N2; nada sobre OT; uso dual con N2.
 
 Calendario de cambios en **hora de España** (convertido a UTC). Si la IA falla, deciden las reglas.
+
+### 6.4 Incidentes de nivel 2 (`incidents.py`, después del triaje)
+Política §1.4 (correlacionar), §5 (escalar cadenas aunque cada alerta sea baja) y §6 (un ticket por intrusión con todos
+los `alert_ids`). Se calcula en `core/data._with_incidents` al cargar los resultados (muestra y directo).
+- **Entran** las alertas de ataque real, falta información o escaladas (lo autorizado no forma incidentes).
+- **Unen** las pistas compartidas: indicador del atacante (IP externa, dominio, hash, remitente, message_id, sesión IA;
+  30 días), cuenta (14 días) y equipo / IP interna (48 h), en cadena. **No unen** la gravedad, la criticidad ni el tipo
+  de regla; ni dominios propios, servicios legítimos, proveedor legítimo, ni pistas en más de 25 alertas.
+- **Decisión**: se escala si alguna alerta se escalaba o si es cadena (≥ 2 reglas distintas de ataque); entonces las
+  alertas que solas se cerraban pasan a escalar con nota (§5). Gravedad = la más alta de sus alertas.
+- **Informe N2**: una alerta de un incidente lleva al ticket `TKT-INC-…` del incidente entero (formato `ticket_salida`).
+- **Medido**: 138 alertas de escenario → 14 incidentes (84 alertas) que coinciden con las historias del reto; ninguna
+  autorizada dentro; muestra de 150 → 8 incidentes (21 alertas). Peor caso (las 11 061 tratadas como ataque): el
+  incidente más grande, 79 alertas.
 
 ### 6.3 Defensa ante manipulación (`guard.py`)
 La base es de arquitectura: la IA solo propone y redacta; la política decide. Encima:
@@ -174,8 +190,9 @@ Tests: `tests/test_injection.py` (29 alertas trampa). Sobre las 138 alertas de e
 | `SOC_WORKERS` | 4 | alertas triadas a la vez |
 | `SOC_DEDUP_WINDOW_MIN` | 5 | ventana de correlación (0 = sin agrupar) |
 | `SOC_VERDICT_ENGINE` | `auto` | `rules` = sin IA (rápido) |
-| `SOC_EXAMPLES` | 1 | `0` quita los campos de ejemplo (`incident_id`) |
-| `SOC_DEV` | 0 | `1` enseña «Incidents» y «Prototip del back» |
+| `SOC_EXAMPLES` | 1 | `0` quita los campos de ejemplo del fixture |
+| `SOC_INCIDENT_DAYS` / `_ACCOUNT_DAYS` / `_HOST_HOURS` / `_HUB` | 30 / 14 / 48 / 25 | incidentes de nivel 2 (§6.4) |
+| `SOC_DEV` | 0 | `1` enseña «Prototip del back» |
 | `LLM_PROVIDER/BASE_URL/API_KEY/MODEL` | pasarela UAB, `ornith` | IA |
 
 ## 9. Bugs y limitaciones pendientes
@@ -192,7 +209,7 @@ Tests: `tests/test_injection.py` (29 alertas trampa). Sobre las 138 alertas de e
 4. En un caso de verdad dudoso, **la IA puede cambiar de veredicto entre sesiones** (p. ej. la subida a WeTransfer
    `ALR-20261014-004075`); con el mismo veredicto el resultado ya es fijo. Mejora posible: votar 3 veces (3× lento).
 5. Los resultados en directo **viven en la sesión del navegador**: recargar la página los pierde.
-6. **Sin incidentes de nivel 2**: no se juntan alertas *distintas* del mismo ataque (ver §10).
+6. **Incidentes sin relacionar entre sí** (nivel 3): el túnel DNS de WMS01 y la VPN de Logisoft (su proveedor) no comparten pista directa y quedan como dos incidentes; el informe de incidente de N2 (`informe_incidente.schema.json`) no se genera.
 7. El kanban muestra las consultas al **terminar** cada alerta, no en tiempo real (falta `on_event` en el back).
 8. «Seguretat de la conclusió» es la **autoestimación de la IA** (o un valor fijo de la regla), no una probabilidad
    calibrada.
@@ -203,24 +220,10 @@ Tests: `tests/test_injection.py` (29 alertas trampa). Sobre las 138 alertas de e
     heredada (`gestoria-pons.example`).
 12. Restos: `assets/deloitte_logo_blanco.png` ya no se usa; `docs/PLAN_FRONTEND.md` está desfasado.
 
-## 10. Siguiente paso exacto: incidentes de nivel 2
+## 10. Siguiente paso
 
-**Qué es**: agrupar alertas **distintas** que forman parte del mismo ataque o incidente (política §6: «varias alertas
-sobre la misma intrusión se documentan en un único ticket»; §5: escalar cadenas de alertas leves). Es lo que la
-correlación de nivel 1 no hace a propósito, porque solo junta repeticiones de la misma regla en minutos.
-
-**Ejemplo de la muestra**: los tres accesos VPN de la cuenta del proveedor Logisoft (`ALR-20261011-011877`,
-`ALR-20261018-011879`, `ALR-20261025-011881`): domingos de madrugada, mismo origen ajeno, semanas distintas.
-
-**Plan previsto**:
-1. Módulo nuevo (p. ej. `incidents.py`) que, **después del triaje**, junte casos que compartan sujeto o indicador
-   (usuario, equipo, IP, dominio, bucket…) en una ventana larga configurable (días), aunque sean reglas distintas,
-   priorizando los que tienen ataque real o conclusión dudosa.
-2. Rellenar `incident_id` en cada vista (el contrato del front ya lo tiene) y quitar el incidente de ejemplo.
-3. Volver a mostrar la página **Incidents** (hoy oculta): tarjeta por incidente, entidades compartidas y línea temporal
-   MITRE (ya hecha por Adri en `views/incidents.py`).
-4. Informe N2 por incidente con todos los `alert_ids` (formato §6) y escalado del incidente si la cadena lo justifica.
-5. Tests y regenerar la muestra.
+Incidentes de nivel 2 hechos (§6.4). Posibles siguientes: relacionar incidentes (nivel 3, `related_incidents`), generar
+el `informe_incidente` para N2 (paciente cero, línea temporal, alcance) y los bugs del §9.
 
 **Otros pendientes para la defensa**: probar en directo con alertas nuevas justo antes, preparar el guion de la demo
 y ensayarlo, y decidir con el equipo los casos discutibles del §9.

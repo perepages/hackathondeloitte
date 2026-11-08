@@ -1,6 +1,8 @@
 """Informe para N2: el ticket en el formato de Deloitte (01_contexto/ticket_salida.schema.json). Textos en catalán.
 
 Dueño: PERSONA A. Arriba el informe legible para una persona; abajo el JSON validado y descargable.
+Si la alerta forma parte de un incidente (incidents.py), el informe es el del INCIDENTE entero: política §6, «varias
+alertas sobre la misma intrusión se documentan en un único ticket con todos los alert_ids».
 """
 import json
 import os
@@ -52,6 +54,52 @@ def build_ticket(r: dict) -> dict:
     }
 
 
+def _union(items: list, key=lambda x: str(x)) -> list:
+    out, seen = [], set()
+    for x in items:
+        k = key(x)
+        if k not in seen:
+            seen.add(k)
+            out.append(x)
+    return out
+
+
+def build_incident_ticket(inc: dict, members: list[dict]) -> dict:
+    """Un ticket de Deloitte para todo el incidente: une los de sus alertas (en orden de llegada)."""
+    tickets = [build_ticket(r) for r in members]
+    attack = [t for t in tickets if t["verdict"] == "true_positive"] or tickets
+    escalate = any(t["escalation"]["escalate"] for t in tickets) or inc["decision"] == "escalate"
+    timeline = " → ".join(f"{r['created_at'][5:16].replace('T', ' ')} {r['rule_name']}" for r in members)
+    affected = {k: _union([v for t in tickets for v in t["affected"][k] if v]) for k in tickets[0]["affected"]}
+    return {
+        "ticket_id": f"TKT-{inc['incident_id']}",
+        "alert_ids": inc["alert_ids"],
+        "title": inc["title"],
+        "verdict": inc["verdict"],
+        "confidence": max(t["confidence"] for t in attack),
+        "severity": inc["severity"],
+        "severity_rationale": (f"La gravetat més alta de les {inc['count']} alertes (la matriu §2 s'aplica alerta per "
+                               "alerta). " + " ".join(t["severity_rationale"] for t in attack
+                                                      if t["severity"] == inc["severity"])[:600]),
+        "affected": affected,
+        "summary": (f"{inc['count']} alertes del mateix atac, del {inc['first_seen'][:16].replace('T', ' ')} al "
+                    f"{inc['last_seen'][:16].replace('T', ' ')}. Comparteixen: "
+                    + ", ".join(f"{x['label']} " + (x["value"].upper() if x["kind"] == "equip" and
+                                                       not x["value"].replace(".", "").isdigit() else x["value"][:60])
+                                for x in inc["shared"][:6])
+                    + f". Seqüència: {timeline}."),
+        "evidence": _union([e for t in tickets for e in t["evidence"]], key=lambda e: e.get("event_id") or str(e)),
+        "enrichment": _union([e for t in tickets for e in t["enrichment"]], key=lambda e: e["indicator"]),
+        "mitre": _union([m for t in tickets for m in t["mitre"]]),
+        "recommended_actions": _union([a for t in tickets for a in t["recommended_actions"]],
+                                      key=lambda a: (a["action"], a["target"])),
+        "executed_actions": [],
+        "escalation": {"escalate": escalate, "to": "N2" if escalate else "",
+                       "reason": "; ".join(inc["reasons"]) if escalate else ""},
+        "open_questions": _union([q for t in tickets for q in t["open_questions"]]),
+    }
+
+
 def validate(ticket: dict) -> str | None:
     """None si cumple el esquema; el error si no; 'sin-esquema' si no está el dataset al lado."""
     try:
@@ -83,8 +131,16 @@ alert_id = st.selectbox("Alerta", ids, index=ids.index(current), key="ticket_ale
                         help="Ordenades de més a menys greu: 🔴 crítica · 🟠 alta · 🟡 mitjana · 🔵 baixa · ⚪ informativa")
 st.session_state["selected_alert"] = alert_id
 r = data.get_result(alert_id)
-t = build_ticket(r)
-rv = r["review"]
+inc, members = data.get_incident(r["incident_id"]) if r.get("incident_id") else (None, [])
+t = build_incident_ticket(inc, members) if inc else build_ticket(r)
+rv = r["review"] if not inc else None
+if inc:
+    st.info(f"**Aquesta alerta forma part de l'incident {inc['incident_id']}** ({inc['count']} alertes del mateix "
+            "atac). Segons la política del SOC (§6) es documenta en **un sol informe** amb totes les alertes: és el "
+            "que veus a sota.", icon=":material/hub:")
+    if st.button("Veure l'incident", key="ticket_to_incident", icon=":material/hub:"):
+        st.session_state["focus_incident"] = inc["incident_id"]
+        st.switch_page("views/incidents.py")
 
 # ---------------------------------------------------------------------------- cabecera
 with st.container(border=True):
@@ -99,7 +155,9 @@ with st.container(border=True):
     m = st.columns(3)
     m[0].metric("Seguretat de la conclusió", f"{round(t['confidence'] * 100)} %" if r["confidence"] is not None else "—")
     m[1].metric("Gravetat", ui.SEVERITY_LABEL[t["severity"]].capitalize(), help=ui.SEVERITY_HELP[t["severity"]])
-    m[2].metric("Tècnica d'atac (MITRE)", ", ".join(t["mitre"]) or "—")
+    m[2].metric("Tècnica d'atac (MITRE)", ", ".join(t["mitre"][:4]) + (" …" if len(t["mitre"]) > 4 else "") or "—")
+    if inc:
+        st.caption(f"Alertes de l'informe: {', '.join(t['alert_ids'])}")
 
 # ---------------------------------------------------------------------------- cuerpo
 c1, c2 = st.columns(2, gap="large")

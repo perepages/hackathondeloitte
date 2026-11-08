@@ -11,7 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP = os.path.join(ROOT, "app.py")
 PAGES = ["views/inici.py", "views/alertes.py", "views/informe_n2.py", "views/accions_resposta.py",
          "views/triatge_directe.py", "views/resum.py", "views/incidents.py"]
-# incidentes y mvp_back están fuera del menú de la demo; con SOC_DEV=1 vuelven (y así se prueban)
+# prototip_back está fuera del menú de la demo; con SOC_DEV=1 vuelve (y así se prueba)
 
 
 @pytest.fixture(autouse=True)
@@ -112,12 +112,14 @@ def test_contencion_lista_con_desplegables():
 
 
 def test_menu_de_la_demo_sin_paginas_internas(monkeypatch):
-    """Lo que ve el jurado: sin «Prototipo del back» ni «Incidents» (solo hay un incidente de ejemplo)."""
+    """Lo que ve el jurado: sin «Prototipo del back»; «Incidents» sí (incidentes reales del back)."""
     monkeypatch.setenv("SOC_DEV", "0")
     at = AppTest.from_file(APP, default_timeout=30).run()
     assert not at.exception, at.exception
     with pytest.raises(ValueError):
         at.switch_page("views/prototip_back.py")
+    at.switch_page("views/incidents.py").run()
+    assert not at.exception, at.exception
 
 
 def test_cola_actualitzar_i_seleccio_amb_radio():
@@ -160,3 +162,16 @@ def test_directe_targetes_d_escalades_amb_la_gravetat_nova(monkeypatch):
     assert not at.exception, at.exception
     cards = [m.value for m in at.markdown if "gravetat " in m.value and "chip" in m.value]
     assert cards and "gravetat alta" in cards[-1] and "gravetat baixa" not in cards[-1]
+
+
+def test_informe_n2_de_un_incidente_cumple_el_esquema():
+    """Política §6: una alerta de un incidente lleva al informe del incidente entero, con todos sus alert_ids."""
+    at = AppTest.from_file(APP, default_timeout=30).run()
+    from core import data
+    inc = data.load_incidents()[0]
+    at.session_state["selected_alert"] = inc["views"][0]
+    at.switch_page("views/informe_n2.py").run()
+    assert not at.exception, at.exception
+    assert any(f"incident {inc['incident_id']}" in i.value for i in at.info)
+    assert any("compleix l'esquema oficial" in s.value for s in at.success)
+    assert any(", ".join(inc["alert_ids"]) in c.value for c in at.caption)

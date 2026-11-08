@@ -10,7 +10,7 @@ Modos (variable de entorno SOC_MODE):
 
 Campos de ejemplo: el back (verdict.decide) ya da veredicto, decisión, acciones, inyección, título y
 resumen; `decision_source` dice si la propuesta salió del LLM o de las reglas de respaldo. El fixture
-trae además `_ejemplo` (reglas de prueba), que se usa SOLO si el back no da el campo (hoy, incident_id);
+trae además `_ejemplo` (reglas de prueba), que se usa SOLO si el back no da el campo;
 esos campos quedan en `view["example_fields"]` y la interfaz los marca como «dato de ejemplo».
 Con SOC_EXAMPLES=0 se desactivan y se ve el back tal cual.
 
@@ -26,7 +26,9 @@ CONTRATO DEL FRONT (lo que devuelve to_view):
   recommended_actions  [{action, target, requires_approval, justification}]
   injection_flags      [{field, excerpt}]
   open_questions       [texto]   (del back)
-  incident_id          texto o None
+  incident_id          texto o None   (incidents.py: alertas distintas de la misma intrusión, nivel 2)
+  incident             {incident_id, title, count, decision, chain, severity} o None
+  escalated_by_incident  True si se escala solo por formar parte de una cadena (política §5)
   queries   [{method, path, params, status (ok|not_found|error), result_count, note, summary}]
   contexts  [{kind, key, data}]   related_logs [dict]   (del back)
   decision_source  llm | rules | None      decision_notes  [correcciones de la política a la propuesta]
@@ -54,10 +56,10 @@ USE_EXAMPLES = os.getenv("SOC_EXAMPLES", "1") != "0"
 
 # asset_criticality no está: la calcula to_view con el inventario (las reglas ponían «Media» si no había activo)
 EXAMPLE_FIELDS = ("verdict", "confidence", "justification", "decision", "title",
-                  "summary", "recommended_actions", "injection_flags", "incident_id")
+                  "summary", "recommended_actions", "injection_flags")
 _EMPTY = {"verdict": "needs_more_info", "confidence": None, "justification": "", "decision": "escalate",
           "asset_criticality": None, "title": "", "summary": "", "recommended_actions": [],
-          "injection_flags": [], "incident_id": None}
+          "injection_flags": []}
 CRIT_RANK = {"baja": 0, "media": 1, "alta": 2, "crítica": 3, "critica": 3}
 
 
@@ -117,6 +119,8 @@ def to_view(preview: dict) -> dict:
         "example_fields": [],
         # correlación de nivel 1: {count, alert_ids, first_seen, last_seen, window_min, shared_keys} o None
         "group": alert.get("group"),
+        # incidente de nivel 2: lo pone incidents.apply al cargar todos los resultados (necesita verlos juntos)
+        "incident_id": None, "incident": None,
     }
     # criticidad: la del activo más crítico que devolvió el back
     crits = [str(c["data"].get("criticality")) for c in contexts if c.get("kind") == "asset" and c["data"].get("criticality")]
@@ -150,12 +154,31 @@ def _load_fixture() -> list[dict]:
         return [to_view(p) for p in json.load(f)]
 
 
-def load_results() -> list[dict]:
-    """Todos los resultados, ordenados por fecha, con la decisión de la persona unida."""
+def _with_incidents() -> tuple[list[dict], list[dict]]:
+    """Resultados con la decisión de la persona y los incidentes de nivel 2 (incidents.py) ya aplicados."""
+    import incidents
     rows = _load_fixture() if MODE == "fixture" else st.session_state.get("data_live_results", [])
     reviews = store.list_reviews()
-    out = [{**r, "review": reviews.get(r["alert_id"])} for r in rows]
-    return sorted(out, key=lambda r: r["created_at"])
+    out = [{**r, "review": reviews.get(r["alert_id"])} for r in rows]  # copias: apply no toca la caché
+    incs = incidents.apply(out)
+    return sorted(out, key=lambda r: r["created_at"]), incs
+
+
+def load_results() -> list[dict]:
+    """Todos los resultados, ordenados por fecha, con la decisión de la persona unida."""
+    return _with_incidents()[0]
+
+
+def load_incidents() -> list[dict]:
+    """Incidentes (alertas distintas de la misma intrusión), de más a menos grave. Ver incidents.py."""
+    return _with_incidents()[1]
+
+
+def get_incident(incident_id: str) -> tuple[dict | None, list[dict]]:
+    """(incidente, sus resultados en orden de llegada)."""
+    rows, incs = _with_incidents()
+    inc = next((i for i in incs if i["incident_id"] == incident_id), None)
+    return inc, [r for r in rows if inc and r["incident_id"] == incident_id]
 
 
 def get_result(alert_id: str) -> dict | None:

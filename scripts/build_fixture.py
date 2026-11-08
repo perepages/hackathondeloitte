@@ -67,7 +67,6 @@ def example_fields(alert: dict) -> dict:
         "summary": why,
         "recommended_actions": recommended_actions(alert, verdict, escalate),
         "injection_flags": flags,
-        "incident_id": None,
         "_fuente": "reglas de ejemplo (scripts/nivel1_triage.py), no el back",
     }
 
@@ -110,16 +109,7 @@ def main():
             if i % 10 == 0:
                 print(f"{i}/{len(alerts)} ({time.time() - t0:.0f} s)", flush=True)
 
-    # Incidente de ejemplo: alertas que comparten remitente fraudulento
-    by_sender: dict[str, list] = {}
-    for p in out:
-        s = (p["alert"].get("evidence") or {}).get("sender")
-        if s and p["_ejemplo"]["injection_flags"]:
-            by_sender.setdefault(s, []).append(p)
-    for n, group in enumerate([g for g in by_sender.values() if len(g) > 1], 1):
-        for p in group:
-            p["_ejemplo"]["incident_id"] = f"INC-EJ-{n:03d}"
-
+    # Los incidentes (nivel 2) no se guardan: los calcula incidents.py al cargar la muestra, con todas las alertas.
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
