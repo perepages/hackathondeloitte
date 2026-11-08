@@ -125,11 +125,14 @@ if pending:
     st.markdown("#### Alertes que esperen una persona")
     st.caption("Prem una targeta per obrir-la a la safata d'alertes.")
     cols = st.columns(min(len(pending), 4))
+    # Resultados recién leídos (no los de `rows`, cargados antes de triar): si una alerta se vuelve a triar,
+    # la tarjeta tiene que enseñar la gravedad nueva, la misma que el kanban de arriba.
+    latest = {r["alert_id"]: r for r in data.load_results()}
     for i, alert_id in enumerate(pending):
-        p = placeholder(alert_id)
-        sev = p.get("severity", "medium")
+        p = latest.get(alert_id) or placeholder(alert_id)
         with cols[i % len(cols)].container(border=True):
-            st.markdown(ui.severity_badge(sev), unsafe_allow_html=True)
+            if p.get("severity"):
+                st.markdown(ui.severity_badge(p["severity"]), unsafe_allow_html=True)
             st.markdown(f"**{ui.md(p.get('rule_name', alert_id))}**")
             st.caption(p.get("source_product", "") + (" · " if p.get("source_product") else "") + alert_id)
             if st.button("Obrir", key=f"directo_open_{i}", use_container_width=True,

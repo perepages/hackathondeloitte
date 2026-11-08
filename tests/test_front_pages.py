@@ -139,3 +139,23 @@ def test_contencion_ordenar():
     assert at.expander[0].label != first
     at.multiselect(key="contencion_sev").set_value(["critical"]).run()
     assert all("Crítica" in e.label for e in at.expander)
+
+
+def test_directe_targetes_d_escalades_amb_la_gravetat_nova(monkeypatch):
+    """Si una alerta ja triada a la sessió es torna a triar, la targeta de baix mostra la gravetat nova."""
+    import copy
+    from core import data
+    base = next(v for v in data._load_fixture() if v["decision"] == "escalate")
+    old = {**copy.deepcopy(base), "severity": "low"}
+    new = {**copy.deepcopy(base), "severity": "high", "decision": "escalate"}
+    monkeypatch.setattr(data, "MODE", "live")
+    monkeypatch.setattr(data, "_triage_one", lambda alert_id: copy.deepcopy(new))
+    at = AppTest.from_file(APP, default_timeout=60)
+    at.session_state["data_live_results"] = [old]
+    at.run()
+    at.switch_page("views/triatge_directe.py").run()
+    at.text_area(key="directo_ids").input(base["alert_id"]).run()
+    at.button(key="directo_go").click().run()
+    assert not at.exception, at.exception
+    cards = [m.value for m in at.markdown if "gravetat " in m.value and "chip" in m.value]
+    assert cards and "gravetat alta" in cards[-1] and "gravetat baixa" not in cards[-1]
