@@ -48,8 +48,7 @@ pg = st.navigation(pages)
 # Logo: solo «Tarvia SOC» (la empresa del reto), con el mismo estilo que la marca de la barra lateral
 st.logo(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "tarvia_soc_logo.svg"), size="large")
 with st.sidebar:
-    st.markdown('<div class="brand-sub">Triatge d\'alertes de nivell 1. El sistema proposa; una persona decideix.</div>'
-                '<div class="brand-sub" style="margin-top:.8rem">Repte Deloitte × UAB The Hack</div>',
+    st.markdown('<div class="brand-sub" style="margin-top:.8rem">Repte Deloitte × UAB The Hack</div>',
                 unsafe_allow_html=True)
     st.caption("Mostra de 150 alertes del repte" if data.MODE == "fixture" else "Connectat a l'API del SOC")
 
