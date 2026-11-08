@@ -32,15 +32,10 @@ def title_with_refresh() -> None:
     t1, t2 = st.columns([5, 1.4], vertical_alignment="bottom")
     t1.title("Alertes")
     if t2.button("Actualitzar alertes", key="cola_refresh", icon=":material/refresh:", use_container_width=True,
-                 help="Torna a carregar la safata i, connectat a l'API, tria les alertes noves que hagin entrat"):
-        try:
-            bar = st.progress(0.0, text="Buscant alertes noves…") if data.MODE != "fixture" else None
-            n = data.refresh(on_progress=(lambda i, t: bar.progress(i / t, text=f"Triant alertes noves: {i} de {t}"))
-                             if bar else None)
-            st.session_state["cola_refresh_msg"] = (f"{n} alerta(es) nova(es) a la safata." if n
-                                                    else "La safata està al dia: no hi ha alertes noves.")
-        except Exception as exc:  # p. ej. la API no responde
-            st.session_state["cola_refresh_msg"] = f"No s'han pogut buscar alertes noves: {exc}"
+                 help="Torna a carregar la safata. Per triar alertes noves, fes servir «Triatge en directe»."):
+        data.refresh()
+        st.session_state["cola_refresh_msg"] = ("Safata actualitzada. Per triar alertes noves, carrega-les a "
+                                                "«Triatge en directe».")
         st.rerun()
     if msg := st.session_state.pop("cola_refresh_msg", None):
         st.toast(msg, icon=":material/refresh:")

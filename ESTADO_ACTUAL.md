@@ -1,6 +1,6 @@
 # Estado actual del proyecto · Triaje N1 Tarvia (reto Deloitte × UAB The Hack)
 
-8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **154 tests en verde** · contención envía `ticket_id` · castellanismos corregidos (`fix_slips`) · Streamlit 1.65
+8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **159 tests en verde** · túnel DNS con criterio firme RB-09 · contención envía `ticket_id` · castellanismos corregidos (`fix_slips`) · Streamlit 1.65
 
 ## 1. En una frase
 

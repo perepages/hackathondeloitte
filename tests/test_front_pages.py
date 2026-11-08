@@ -173,7 +173,7 @@ def test_informe_n2_de_un_incidente_cumple_el_esquema():
     at.switch_page("views/informe_n2.py").run()
     assert not at.exception, at.exception
     assert any(f"incident {inc['incident_id']}" in i.value for i in at.info)
-    assert any("compleix l'esquema oficial" in s.value for s in at.success)
+    assert not [e.value for e in at.error if "no compleix l'esquema" in e.value]  # cumple: sin aviso
     assert any(", ".join(inc["alert_ids"]) in c.value for c in at.caption)
 
 

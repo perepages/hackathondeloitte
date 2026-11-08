@@ -319,8 +319,19 @@ def decide(preview: TriagePreview, *, matrix_severity: str, matrix_rationale: st
             notes.append("La IA cita dades que no apareixen enlloc de l'alerta ni de les evidències: "
                          + ", ".join(invented[:5]) + ". No s'han de prendre com a certes.")
 
-    # Opción 2: la IA y las reglas no coinciden en si es un ataque -> conclusión dudosa, la revisa una persona
     attack = lambda v: {"true_positive": True, "benign_true_positive": False, "false_positive": False}.get(v)  # noqa
+    # Criterio objetivo de un runbook (p. ej. RB-09 «software conocido»): medido sobre hechos de la alerta, sin
+    # interpretación, prevalece sobre la IA. Nunca si hay indicios de manipulación o la IA cita datos inventados.
+    if (source == "llm" and rules_view and rules_view.get("firm") and not all_flags and not llm_suspects
+            and not invented and attack(verdict) and attack(rules_view["verdict"]) is False):
+        notes.append(f"La IA deia «{_label(verdict)}», però s'aplica el criteri objectiu del runbook "
+                     f"({rules_view['rule']}).")
+        verdict, confidence = rules_view["verdict"], rules_view["confidence"]
+        justification, proposed_decision = rules_view["justification"], rules_view["decision"]
+        proposal = {**proposal, "verdict": verdict, "recommended_actions": rules_view["recommended_actions"],
+                    "title": rules_view["title"] or proposal["title"], "summary": rules_view["summary"]}
+
+    # Opción 2: la IA y las reglas no coinciden en si es un ataque -> conclusión dudosa, la revisa una persona
     doubtful = (source == "llm" and not flags and rules_view is not None
                 and attack(verdict) is not None and attack(rules_view.get("verdict")) is not None
                 and attack(verdict) != attack(rules_view["verdict"]))

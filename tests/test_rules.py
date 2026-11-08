@@ -149,3 +149,24 @@ def test_vpn_de_proveedor_fuera_de_horario_desde_origen_nuevo_se_escala():
     # con el cambio aprobado del WMS que lo cubre, es actividad autorizada
     covered = rules.evaluate(_p("UC-VPN-001", evidence=ev, created_at="2026-10-16T20:10:00Z", contexts=[WMS_CHANGE]))
     assert covered["verdict"] == "benign_true_positive"
+
+
+# --- túnel DNS (RB-09: programari conegut → tancar). Al dataset: 30 de benignes (McAfee, Sophos, Spamhaus, e5.sk;
+# dominis de 8-22 anys i 45-287 equips) i un atac real (domini de 15 dies, 1 equip).
+
+def test_tunel_dns_de_antivirus_es_tanca_amb_criteri_ferm():
+    p = rules.runbooks(_p("UC-NET-006", {"parent_domain": "avqs.mcafee.com", "domain_age_days": 7125,
+                                         "distinct_clients": 132, "queries_1h": 305}))
+    assert p["verdict"] == "false_positive" and p["firm"] and "RB-09" in p["rule"]
+
+
+def test_tunel_dns_amb_domini_nou_i_un_equip_s_escala():
+    p = rules.runbooks(_p("UC-NET-006", {"parent_domain": "cdn-wms-metrics.example", "domain_age_days": 15,
+                                         "distinct_clients": 1}, {"hosts": [{"hostname": "WMS01"}]}))
+    assert p["verdict"] == "true_positive" and p["decision"] == "escalate" and not p.get("firm")
+
+
+def test_tunel_dns_antic_pero_amb_mala_reputacio_no_es_tanca():
+    p = rules.runbooks(_p("UC-NET-006", {"parent_domain": "old.example", "domain_age_days": 4000,
+                                         "distinct_clients": 60}, contexts=[_intel("old.example", "malicious")]))
+    assert p is None or p["verdict"] != "false_positive"

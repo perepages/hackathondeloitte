@@ -254,26 +254,12 @@ def analyze_live(alert_id: str) -> dict:
     return view
 
 
-def refresh(max_new: int = 5, on_progress: Callable[[int, int], None] | None = None) -> int:
-    """Botón «Actualitzar alertes». fixture: vuelve a leer la muestra. live: tría las alertas nuevas que hayan
-    entrado en la cola de la API (como mucho `max_new` por pulsación, para no hacer esperar). Devuelve cuántas."""
+def refresh() -> None:
+    """Botón «Actualitzar alertes»: vuelve a leer la bandeja (resultados, revisiones e incidentes). No tría nada:
+    en la API de Deloitte las ~11.000 alertas del dataset están todas en estado «new» y no entra ninguna nueva, así
+    que «tría las nuevas de la cola» metía siempre las 5 primeras del dataset (viejas y del mismo tipo). Las alertas
+    se tría desde «Triatge en directe» (fichero o lista de ids)."""
     _load_fixture.clear()
-    if MODE == "fixture":
-        return 0
-    import soc_api
-    known = {i for r in st.session_state.get("data_live_results", [])
-             for i in [r["alert_id"], *((r.get("group") or {}).get("alert_ids") or [])]}
-    queue = soc_api.list_alerts(status="new", limit=100).get("items", [])
-    new = [a["alert_id"] for a in queue if a.get("alert_id") not in known][:max_new]
-    done = []
-
-    def progress(ev: dict) -> None:
-        if ev["type"] in ("verdict", "error"):
-            done.append(ev)
-            if on_progress:
-                on_progress(len(done), len(new))
-
-    return len(run_triage(new, progress))
 
 
 def parse_alert_file(content: bytes | str) -> tuple[list[str], list[dict]]:

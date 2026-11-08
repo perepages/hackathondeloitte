@@ -223,12 +223,9 @@ if t["open_questions"]:
 st.divider()
 err = validate(t)
 v1, v2 = st.columns([3, 1], vertical_alignment="center")
-if err is None:
-    v1.success("Format comprovat: l'informe compleix l'esquema oficial de Deloitte (ticket_salida.schema.json).",
-               icon=":material/verified:")
-elif err == "sin-esquema":
+if err == "sin-esquema":  # si cumple el esquema no se muestra nada; solo se avisa si algo falla
     v1.caption("No s'ha pogut comprovar el format: no es troba l'esquema de Deloitte.")
-else:
+elif err is not None:
     v1.error(f"L'informe no compleix l'esquema: {err}")
 v2.download_button("Descarregar l'informe (JSON)", json.dumps(t, ensure_ascii=False, indent=2),
                    file_name=f"{t['ticket_id']}.json", mime="application/json", use_container_width=True,

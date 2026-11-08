@@ -45,7 +45,11 @@ if file_skipped:
 # Al tornar a aquesta pàgina el fitxer pujat ja no hi és (Streamlit l'oblida en canviar de pàgina): si no hi ha
 # fitxer ni llista nous, es mostra el resultat de l'últim lot en lloc d'un tauler buit amb alertes d'exemple.
 last = st.session_state.get("directo_last")
-restored = bool(last) and not up and not ids
+# També quan el fitxer o la llista són el mateix lot que s'acaba de triar: qualsevol clic (p. ex. «Obrir» d'una
+# targeta escalada) torna a executar la pàgina, i sense això el tauler es buidava i el botó deixava d'existir, de
+# manera que el primer clic no feia res.
+same_batch = bool(last) and bool(ids) and list(ids) == last["ids"]
+restored = bool(last) and ((not up and not ids) or same_batch)
 if up and not ids:
     st.error("El fitxer no té cap alerta vàlida per triar.")
 elif not ids:

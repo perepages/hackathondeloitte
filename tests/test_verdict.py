@@ -150,3 +150,24 @@ def test_ia_i_regles_no_coincideixen_s_escala_com_a_dubtosa(monkeypatch):
     _llm(monkeypatch, {"verdict": "false_positive", "confidence": 0.9, "decision": "close"})
     out = _decide(_preview(evidence={"sender": "news@shop.example", "subject": "Ofertes"}), matrix="low")
     assert out.decision == "close"
+
+
+DNS_MCAFEE = {"parent_domain": "avqs.mcafee.com", "domain_age_days": 7125, "distinct_clients": 132}
+
+
+def test_criteri_ferm_del_runbook_preval_sobre_la_ia(monkeypatch):
+    _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.85, "decision": "escalate", "title": "Túnel DNS",
+                       "summary": "Exfiltració.", "justification": "Moltes consultes llargues.",
+                       "recommended_actions": [{"action": "isolate_host", "target": "WS-1"}]})
+    out = _decide(_preview(rule_id="UC-NET-006", evidence=DNS_MCAFEE, entities={"hosts": [{"hostname": "WS-1"}]}))
+    assert out.verdict == "false_positive" and out.decision == "close"
+    assert not any(a.action == "isolate_host" for a in out.recommended_actions)
+    assert any("criteri objectiu del runbook" in n for n in out.decision_notes)
+
+
+def test_criteri_ferm_no_s_aplica_si_hi_ha_manipulacio(monkeypatch):
+    _llm(monkeypatch, {"verdict": "true_positive", "confidence": 0.85, "decision": "escalate", "title": "Túnel DNS",
+                       "summary": "x", "justification": "x", "recommended_actions": [],
+                       "injection_detected": True})
+    out = _decide(_preview(rule_id="UC-NET-006", evidence=DNS_MCAFEE))
+    assert out.decision == "escalate"

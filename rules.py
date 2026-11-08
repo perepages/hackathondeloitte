@@ -298,6 +298,27 @@ def runbooks(preview: dict) -> dict | None:
                              "autoritzats (RB-08). No s'actua sobre OT: s'escala a Operacions.", "RB-08 OT",
                              decision="escalate", actions=[])
 
+    if rule == "UC-NET-006":  # túnel DNS (RB-09: «software conocido → cerrar»)
+        age, clients = ev.get("domain_age_days"), ev.get("distinct_clients")
+        parent = str(ev.get("parent_domain") or next(iter(ent.get("domains") or []), ""))
+        if (isinstance(age, (int, float)) and age >= 365 and isinstance(clients, (int, float)) and clients >= 20
+                and not tip_matches(preview)):
+            # Antivirus y listas antispam (McAfee GTI, Sophos, Spamhaus…) consultan por DNS con subdominios largos.
+            # Un túnel de un atacante usa un dominio nuevo desde uno o dos equipos, no uno de años desde decenas.
+            p = _proposal("false_positive", 0.9, f"Consultes llargues a {parent}, domini de {int(age)} dies que fan "
+                          f"servir {int(clients)} equips diferents i sense mala reputació: és el patró d'un programari "
+                          "de seguretat conegut (consultes de reputació per DNS), no un túnel (RB-09: programari "
+                          "conegut → tancar i proposar una exclusió a la regla).", "RB-09 programari conegut")
+            p["firm"] = True  # criterio objetivo del runbook: prevalece sobre la IA (verdict.decide)
+            return p
+        if isinstance(age, (int, float)) and age < 90 and isinstance(clients, (int, float)) and clients <= 2:
+            return _proposal("true_positive", 0.85, f"{ev.get('queries_1h', 'Moltes')} consultes en 1 h amb etiquetes "
+                             f"llargues a {parent}, domini de {int(age)} dies que només fa servir aquest equip: "
+                             "possible exfiltració per DNS (RB-09).", "RB-09 túnel DNS", decision="escalate",
+                             actions=[{"action": "block_ioc", "target": parent, "justification": "Possible túnel DNS."}]
+                             + ([{"action": "isolate_host", "target": host, "justification": "Possible exfiltració."}]
+                                if host else []))
+
     if rule in ("UC-NET-001", "UC-NET-005"):
         domain = str(ev.get("domain") or ev.get("parent_domain") or next(iter(ent.get("domains") or []), ""))
         good = tip_matches(preview, KNOWN_GOOD)

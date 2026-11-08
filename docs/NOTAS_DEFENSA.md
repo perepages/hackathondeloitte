@@ -156,6 +156,31 @@ Simulación del día de la defensa: fichero `demo/prova_directe.jsonl` subido en
 
 ---
 
+## 3d. Las 10 alertas «comunes» de Deloitte — 8 nov
+
+Fichero `03_alertas/demo_alertas_comunes.jsonl` (copia en `demo/`). Mezcla **6 escenarios de ataque** (macro de
+Office, factura falsa con texto oculto a la IA, cambio de IBAN de 148.320 €, AnyDesk, VPN del proveedor Logisoft
+desde Lituania, paquete npm que roba secretos) y **4 falsos positivos típicos de un SOC** (pentest autorizado,
+inventario SCCM, viaje imposible por la salida de Microsoft del móvil, antivirus McAfee consultando por DNS).
+Lo que miden: no cerrar ataques **y** no llenar de ruido al N2.
+
+| | Antes | Ahora |
+|---|---|---|
+| Ataques escalados | 6/6 | 6/6 |
+| Trampa de inyección detectada | 1/1 | 1/1 |
+| Falsos positivos cerrados | 2-3 de 4 | 3-4 de 4 |
+
+- **Túnel DNS de McAfee**: la IA lo llamaba ataque y proponía **aislar el portátil**. Falla siempre igual, no por
+  azar. En todo el dataset hay 30 alertas de túnel DNS de antivirus/antispam (dominios de 8-22 años, 45-287 equipos)
+  y una real (dominio de 15 días, 1 equipo). Regla RB-09 nueva: dominio ≥ 1 año, ≥ 20 equipos y sin mala reputación
+  → falsa alarma; dominio < 90 días y ≤ 2 equipos → túnel, escalar. Es un **criterio firme**: hecho medible del
+  runbook que prevalece sobre la IA (con nota en la ficha), salvo si hay indicios de manipulación o la IA cita datos
+  inventados. Verificado en directo: McAfee se cierra, el túnel real sigue escalado.
+- **Viaje imposible**: las reglas aciertan (falsa alarma); la IA a veces dice ataque. Cuando no coinciden se escala
+  como «dudosa»: falla hacia el lado seguro. Lo dejamos así a propósito.
+- Detalles menores que no cambian decisiones: en el npm propone `reset_password` sobre `NPM_TOKEN` (es un token);
+  el fraude de 148.000 € sale como gravedad media.
+
 ## 4. Errores y problemas que nos hemos encontrado (y qué hicimos)
 
 | Problema | Cómo lo vimos | Qué hicimos |
@@ -177,6 +202,8 @@ Simulación del día de la defensa: fichero `demo/prova_directe.jsonl` subido en
 | `SOC_MODE` y otras opciones no se leían del `.env` (se podía arrancar la demo en el modo equivocado) | Revisión | El `.env` se carga antes que nada |
 | Faltaban FastAPI y uvicorn en `requirements.txt` (la API no arrancaba en un equipo limpio) | Revisión | Añadidos |
 | En un caso de verdad dudoso, **la IA puede cambiar de veredicto** entre ejecuciones | 3 pasadas sobre las mismas alertas | La decisión ya no depende del azar con el mismo veredicto; votar 3 veces sería 3× más lento |
+| «Actualitzar alertes» añadía 5 alertas viejas y repetidas en cada clic | Probando la app | En la API de Deloitte las ~11.000 alertas están siempre en «new»: no hay cola de nuevas. Ahora solo recarga la bandeja; se tría desde «Triatge en directe» |
+| El botón «Obrir» tras el triaje no respondía al primer clic | Probando la app | El clic re-ejecuta la página y el tablero se vaciaba (el botón ya no existía). Ahora, si es el mismo lote, se restaura el resultado |
 
 ---
 
