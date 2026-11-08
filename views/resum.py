@@ -28,7 +28,9 @@ if not rows:
 n = len(rows)
 closed = sum(r["decision"] == "close" for r in rows)
 m = st.columns(4)
-m[0].metric("Alertes revisades", n)
+originals = sum(ui.group_count(r) for r in rows)
+m[0].metric("Alertes revisades", n, help=(f"{originals} alertes originals: {originals - n} eren el mateix esdeveniment "
+                                         "repetit i s'han agrupat abans de triar." if originals > n else None))
 m[1].metric("Es tanquen sense intervenció", f"{round(100 * closed / max(1, n))} %")
 m[2].metric("Necessiten una persona", n - closed)
 m[3].metric("Hores d'analista estalviades", f"{closed * MIN_PER_ALERT / 60:.1f} h",

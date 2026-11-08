@@ -115,6 +115,8 @@ def to_view(preview: dict) -> dict:
         "related_logs": preview.get("related_logs") or [],
         "queries": [{**q, "summary": summarize_query(q, contexts)} for q in preview.get("queries") or []],
         "example_fields": [],
+        # correlación de nivel 1: {count, alert_ids, first_seen, last_seen, window_min, shared_keys} o None
+        "group": alert.get("group"),
     }
     # criticidad: la del activo más crítico que devolvió el back
     crits = [str(c["data"].get("criticality")) for c in contexts if c.get("kind") == "asset" and c["data"].get("criticality")]
@@ -181,12 +183,24 @@ class SkippedAlert(Exception):
     """Alerta que no se puede triar (p. ej. la API del SOC no la reconoce). Se salta y se avisa; no para el lote."""
 
 
-def _triage_one(alert_id: str) -> dict:
-    """Tría una alerta con el back y devuelve la vista. Sin Streamlit: se puede llamar desde varios hilos."""
+def _fetch_alert(alert_id: str) -> dict:
+    """La alerta tal como la tiene la API del SOC (fuente de verdad). Si no la reconoce, se salta."""
+    import soc_api
+    try:
+        return soc_api.get_alert(alert_id)
+    except soc_api.SocAPIError as exc:
+        if exc.status_code == 404:
+            raise SkippedAlert("l'API del SOC no reconeix aquesta alerta") from exc
+        raise SkippedAlert(f"error de l'API del SOC: {str(exc)[:120]}") from exc
+
+
+def _triage_one(alert_id: str, alert: dict | None = None) -> dict:
+    """Tría una alerta (o una alerta agrupada ya leída) con el back y devuelve la vista. Sin Streamlit: se puede
+    llamar desde varios hilos."""
     import soc_api
     from triage import analyze_alert
     try:
-        preview = analyze_alert(alert_id).model_dump()
+        preview = analyze_alert(alert_id, alert=alert).model_dump()
     except soc_api.SocAPIError as exc:
         if exc.status_code == 404:
             raise SkippedAlert("l'API del SOC no reconeix aquesta alerta") from exc
@@ -215,7 +229,8 @@ def refresh(max_new: int = 5, on_progress: Callable[[int, int], None] | None = N
     if MODE == "fixture":
         return 0
     import soc_api
-    known = {r["alert_id"] for r in st.session_state.get("data_live_results", [])}
+    known = {i for r in st.session_state.get("data_live_results", [])
+             for i in [r["alert_id"], *((r.get("group") or {}).get("alert_ids") or [])]}
     queue = soc_api.list_alerts(status="new", limit=100).get("items", [])
     new = [a["alert_id"] for a in queue if a.get("alert_id") not in known][:max_new]
     done = []
@@ -271,10 +286,22 @@ def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: fl
     Los eventos se emiten siempre desde el hilo principal (Streamlit solo pinta desde ahí)."""
     results: list[dict] = []
     if MODE == "fixture":
-        by_id = {r["alert_id"]: r for r in load_results()}
+        by_id = {}
+        for r in load_results():  # una alerta agrupada responde también por los ids de las que agrupa
+            for i in [r["alert_id"], *((r.get("group") or {}).get("alert_ids") or [])]:
+                by_id.setdefault(i, r)
+        seen = set()
         for alert_id in alert_ids:
-            on_event({"type": "alert_started", "alert_id": alert_id})
             view = by_id.get(alert_id)
+            if view is not None:
+                if view["alert_id"] in seen:  # otra alerta del mismo grupo: ya está
+                    continue
+                seen.add(view["alert_id"])
+                if view.get("group"):
+                    on_event({"type": "grouped", "alert_id": view["alert_id"],
+                              "members": [i for i in view["group"]["alert_ids"] if i in alert_ids]})
+                alert_id = view["alert_id"]
+            on_event({"type": "alert_started", "alert_id": alert_id})
             if view is None:
                 on_event({"type": "error", "alert_id": alert_id,
                           "message": "no és a la mostra (per triar alertes noves cal el mode en directe)"})
@@ -287,14 +314,38 @@ def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: fl
         on_event({"type": "done"})
         return results
 
-    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-    pending, running = list(alert_ids), {}
-    with ThreadPoolExecutor(max_workers=max(1, workers or WORKERS)) as pool:
+    import correlation
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
+    n_workers = max(1, workers or WORKERS)
+
+    # 1) Leer las alertas de la API (fuente de verdad); las que no reconoce se saltan
+    fetched: dict[str, dict] = {}
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_fetch_alert, a): a for a in dict.fromkeys(alert_ids)}
+        for future in as_completed(futures):
+            alert_id = futures[future]
+            try:
+                fetched[alert_id] = future.result()
+            except SkippedAlert as exc:
+                on_event({"type": "error", "alert_id": alert_id, "message": str(exc)})
+            except Exception as exc:
+                on_event({"type": "error", "alert_id": alert_id, "message": f"error en llegir-la: {str(exc)[:120]}"})
+
+    # 2) Correlación de nivel 1: el mismo evento repetido en la ventana -> una sola alerta (antes de la IA)
+    grouped = correlation.correlate([fetched[a] for a in dict.fromkeys(alert_ids) if a in fetched])
+    for alert in grouped:
+        if alert.get("group"):
+            on_event({"type": "grouped", "alert_id": alert["alert_id"], "members": alert["group"]["alert_ids"]})
+
+    # 3) Triar una alerta por grupo, `n_workers` a la vez
+    pending, running = list(grouped), {}
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
         while pending or running:
-            while pending and len(running) < max(1, workers or WORKERS):
-                alert_id = pending.pop(0)
+            while pending and len(running) < n_workers:
+                alert = pending.pop(0)
+                alert_id = alert["alert_id"]
                 on_event({"type": "alert_started", "alert_id": alert_id})
-                running[pool.submit(_triage_one, alert_id)] = alert_id
+                running[pool.submit(_triage_one, alert_id, alert)] = alert_id
             finished, _ = wait(running, return_when=FIRST_COMPLETED)
             for future in finished:
                 alert_id = running.pop(future)

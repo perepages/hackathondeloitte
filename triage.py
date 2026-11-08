@@ -79,12 +79,14 @@ def _criticality_rank(value: str) -> int:
         return -1
 
 
-def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
+def analyze_alert(alert_id: str, decide: bool = True, alert: dict | None = None) -> TriagePreview:
     """Recoge evidencias acotadas y, si `decide`, propone veredicto, decisión y acciones (verdict.decide).
 
     La propuesta la da el LLM (assistant.decide_json) con las reglas de scripts/nivel1_triage.py como red de
-    seguridad, y la política SOC se aplica siempre encima. La decisión final es de una persona."""
-    raw_alert = soc_api.get_alert(alert_id)
+    seguridad, y la política SOC se aplica siempre encima. La decisión final es de una persona.
+
+    `alert`: la alerta ya leída (p. ej. la alerta agrupada de correlation.correlate); si no, se pide a la API."""
+    raw_alert = alert if alert is not None else soc_api.get_alert(alert_id)
     alert = Alert.model_validate(raw_alert)
     contexts: list[ContextRecord] = []
     related_logs: list[dict] = []
@@ -235,7 +237,7 @@ def analyze_alert(alert_id: str, decide: bool = True) -> TriagePreview:
     log_source = _PRODUCT_TO_LOG_SOURCE.get(alert.source_product.upper())
     since, until = _window(alert.created_at)
     if log_source:
-        for event_id in alert.related_events[:5]:
+        for event_id in alert.related_events[:8]:  # una alerta agrupada puede traer los de varias
             params = {"q": event_id, "desde": since, "hasta": until, "limit": 5}
             result = fetch(
                 f"/logs/{log_source}",

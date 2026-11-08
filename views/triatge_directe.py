@@ -48,7 +48,7 @@ go = b1.button(f"Començar amb {len(ids)} alertes", icon=":material/play_arrow:"
 progress = b2.progress(0.0, text=f"0 de {len(ids)} alertes revisades")
 board = st.empty()
 
-state = {"in": list(ids), "work": [], "calls": {}, "close": [], "esc": [], "skipped": []}
+state = {"in": list(ids), "work": [], "calls": {}, "close": [], "esc": [], "skipped": [], "groups": {}}
 
 
 def placeholder(alert_id: str) -> dict:
@@ -59,10 +59,18 @@ def placeholder(alert_id: str) -> dict:
 BOARD_H = 420  # altura fija de cada columna del kanban; scroll interno si hay muchas tarjetas
 
 
+def with_group(alert_id: str) -> dict:
+    """La targeta d'una alerta encara sense triar, amb el nombre d'alertes que agrupa (si n'agrupa)."""
+    card = dict(placeholder(alert_id))
+    if alert_id in state["groups"]:
+        card["group"] = {"count": len(state["groups"][alert_id])}
+    return card
+
+
 def paint():
-    work = [ui.live_card(placeholder(a), "work", state["calls"].get(a, [])) for a in state["work"]]
+    work = [ui.live_card(with_group(a), "work", state["calls"].get(a, [])) for a in state["work"]]
     spec = [
-        ("Entren", "Avisos nous esperant revisió", [ui.live_card(placeholder(i), "in") for i in state["in"]], False),
+        ("Entren", "Avisos nous esperant revisió", [ui.live_card(with_group(i), "in") for i in state["in"]], False),
         ("Investigant", "El sistema en revisa diverses alhora", work, False),
         ("Tancades pel sistema", "Concloses i justificades", [ui.live_card(r, "close") for r in state["close"]], False),
         ("Esperen una persona", "S'escalen a un analista sènior", [ui.live_card(r, "esc") for r in state["esc"]], True),
@@ -75,11 +83,21 @@ def paint():
     board.markdown(html, unsafe_allow_html=True)
     done = len(state["close"]) + len(state["esc"])
     done += len(state["skipped"])
-    progress.progress(min(1.0, done / max(1, len(ids))), text=f"{done} de {len(ids)} alertes revisades")
+    absorbed = sum(len(m) - 1 for m in state["groups"].values())  # alertes que ja van dins d'un altre cas
+    total = len(ids) - absorbed
+    text = (f"{done} de {total} casos revisats ({len(ids)} alertes; {absorbed} eren el mateix esdeveniment i "
+            "s'han agrupat)" if absorbed else f"{done} de {total} alertes revisades")
+    progress.progress(min(1.0, done / max(1, total)), text=text)
 
 
 def on_event(ev: dict):
     aid = ev.get("alert_id")
+    if ev["type"] == "grouped":  # correlació de nivell 1: les altres alertes del grup ja no es trien a part
+        members = ev.get("members") or [aid]
+        state["groups"][aid] = members
+        state["in"] = [i for i in state["in"] if i == aid or i not in members]
+        if aid not in state["in"] and aid not in state["work"]:
+            state["in"].append(aid)
     if ev["type"] == "alert_started":
         if aid in state["in"]:
             state["in"].remove(aid)

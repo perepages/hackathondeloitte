@@ -109,6 +109,10 @@ def build_context(result: dict) -> dict:
     ctx = {
         "alerta": {k: alert.get(k) for k in ("alert_id", "created_at", "source_product", "rule_name", "severity",
                                              "description", "entities", "evidence", "mitre")},
+        # Correlación de nivel 1: si varias alertas eran el mismo evento repetido, llegan aquí como una sola
+        "agrupacion": ({"eventos_agrupados": g.get("count"), "alert_ids": g.get("alert_ids"),
+                        "primera": g.get("first_seen"), "ultima": g.get("last_seen")}
+                       if (g := alert.get("group")) else None),
         "gravedad_calculada": result.get("severity"),
         "razon_gravedad": result.get("severity_rationale"),
         "veredicto": result.get("verdict"),
@@ -175,6 +179,8 @@ DECISION_PROMPT = (
     "«Sin datos en inteligencia» no significa limpio, pero tampoco basta para llamarlo ataque: hacen falta "
     "indicios concretos. Un intento bloqueado por un control sin actividad posterior es true_positive con "
     "severity_adjustment -1; ejecución o acceso confirmados (no una simple resolución DNS o conexión), +1.\n"
+    "Si «agrupacion» no es null, el sistema ya ha juntado varias alertas que son el mismo evento repetido en pocos "
+    "minutos: analízalo como un único caso y ten en cuenta cuántas veces se ha repetido.\n"
     "Un cambio aprobado solo autoriza la actividad si en «cambios_aprobados» tiene cubre_esta_alerta=true (el "
     "sistema ya ha comprobado la ventana horaria y las IPs de origen); si es false, no lo uses como justificación.\n"
     "Criterios del SOC: un subdominio aleatorio de un CDN o cloud legítimo (amazonaws.com, cloudfront.net, "

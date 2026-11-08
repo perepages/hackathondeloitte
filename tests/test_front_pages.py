@@ -149,7 +149,8 @@ def test_directe_targetes_d_escalades_amb_la_gravetat_nova(monkeypatch):
     old = {**copy.deepcopy(base), "severity": "low"}
     new = {**copy.deepcopy(base), "severity": "high", "decision": "escalate"}
     monkeypatch.setattr(data, "MODE", "live")
-    monkeypatch.setattr(data, "_triage_one", lambda alert_id: copy.deepcopy(new))
+    monkeypatch.setattr(data, "_triage_one", lambda alert_id, alert=None: copy.deepcopy(new))
+    monkeypatch.setattr(data, "_fetch_alert", lambda alert_id: copy.deepcopy(base["alert"]))
     at = AppTest.from_file(APP, default_timeout=60)
     at.session_state["data_live_results"] = [old]
     at.run()

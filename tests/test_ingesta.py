@@ -29,6 +29,12 @@ def test_parse_salta_lineas_rotas_y_sin_alert_id():
 def live(monkeypatch):
     monkeypatch.setattr(data, "MODE", "live")
     monkeypatch.setattr(data, "_store_live", lambda view: None)  # sin sesión de Streamlit
+    # la API: cada alerta, de una regla distinta (que no s'agrupin entre elles); ALR-NOVA no hi és
+    def fetch(alert_id):
+        if alert_id == "ALR-NOVA":
+            raise data.SkippedAlert("l'API del SOC no reconeix aquesta alerta")
+        return {"alert_id": alert_id, "rule_id": f"UC-{alert_id}", "created_at": "2026-10-10T10:00:00Z"}
+    monkeypatch.setattr(data, "_fetch_alert", fetch)
 
 
 def _fake_view(alert_id):
@@ -36,9 +42,7 @@ def _fake_view(alert_id):
 
 
 def test_alerta_que_la_api_no_reconeix_es_salta_i_la_resta_continua(live, monkeypatch):
-    def fake(alert_id):
-        if alert_id == "ALR-NOVA":
-            raise data.SkippedAlert("l'API del SOC no reconeix aquesta alerta")
+    def fake(alert_id, alert=None):
         if alert_id == "ALR-PETA":
             raise RuntimeError("boom")
         return _fake_view(alert_id)
@@ -53,17 +57,20 @@ def test_alerta_que_la_api_no_reconeix_es_salta_i_la_resta_continua(live, monkey
 
 def test_404_de_la_api_es_converteix_en_alerta_saltada(monkeypatch):
     import triage
-    def not_found(alert_id):
+    def not_found(alert_id, **kw):
         raise soc_api.SocAPIError("no", status_code=404)
     monkeypatch.setattr(triage, "analyze_alert", not_found)
+    monkeypatch.setattr(soc_api, "get_alert", not_found)
     with pytest.raises(data.SkippedAlert, match="no reconeix"):
         data._triage_one("ALR-X")
+    with pytest.raises(data.SkippedAlert, match="no reconeix"):
+        data._fetch_alert("ALR-X")
 
 
 def test_tria_diverses_alhora_i_els_events_surten_del_fil_principal(live, monkeypatch):
     active, peak, lock = [0], [0], threading.Lock()
 
-    def slow(alert_id):
+    def slow(alert_id, alert=None):
         with lock:
             active[0] += 1
             peak[0] = max(peak[0], active[0])

@@ -89,18 +89,26 @@ def main():
     with open(args.sample, encoding="utf-8") as f:
         ids = [json.loads(line)["alert_id"] for line in f if line.strip()][: args.limit]
 
-    def one(alert_id: str) -> dict:
-        preview = analyze_alert(alert_id).model_dump()
+    import correlation
+    # Correlación de nivel 1 antes de triar (igual que en directo): el mismo evento repetido en la ventana se
+    # tría una sola vez, como una alerta agrupada
+    alerts = correlation.correlate([soc_api.get_alert(i) for i in ids])
+    n_grouped = sum(1 for a in alerts if a.get("group"))
+    print(f"{len(ids)} alertes -> {len(alerts)} després d'agrupar ({n_grouped} grups, finestra "
+          f"{correlation.window_minutes():g} min)", flush=True)
+
+    def one(alert: dict) -> dict:
+        preview = analyze_alert(alert["alert_id"], alert=alert).model_dump()
         preview["_ejemplo"] = example_fields(preview["alert"])
         return preview
 
     from concurrent.futures import ThreadPoolExecutor
     out, t0 = [], time.time()
     with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
-        for i, preview in enumerate(pool.map(one, ids), 1):
+        for i, preview in enumerate(pool.map(one, alerts), 1):
             out.append(preview)
             if i % 10 == 0:
-                print(f"{i}/{len(ids)} ({time.time() - t0:.0f} s)", flush=True)
+                print(f"{i}/{len(alerts)} ({time.time() - t0:.0f} s)", flush=True)
 
     # Incidente de ejemplo: alertas que comparten remitente fraudulento
     by_sender: dict[str, list] = {}

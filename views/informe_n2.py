@@ -22,7 +22,7 @@ def build_ticket(r: dict) -> dict:
         f"{r['rule_name']}: {ui.VERDICT_LABEL[r['verdict']].lower()}"
     return {
         "ticket_id": f"TKT-{r['alert_id']}",
-        "alert_ids": [r["alert_id"]],
+        "alert_ids": (r.get("group") or {}).get("alert_ids") or [r["alert_id"]],  # política §6: un ticket per esdeveniment
         "title": title,
         "verdict": r["verdict"],
         "confidence": float(r["confidence"] or 0.0),

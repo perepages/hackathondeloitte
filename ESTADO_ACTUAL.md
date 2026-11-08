@@ -147,5 +147,14 @@ obligatorio de un runbook → escalar; el resto se cierra. Si la IA y las reglas
 escala como «conclusió dubtosa». Medido: las mismas 10 alertas triadas 3 veces dan el mismo resultado. Límite: en un
 caso dudoso la IA puede cambiar su veredicto entre sesiones (ataque / no ataque).
 
+**Correlación de nivel 1 (8 nov).** `correlation.py` agrupa, ANTES del triaje y de la IA, las alertas que son el
+mismo evento repetido: misma regla, dentro de la ventana `SOC_DEDUP_WINDOW_MIN` (5 min por defecto, contada desde la
+primera; 0 la desactiva) y mismos datos clave (mismo sujeto —equipo, usuario, cliente o bucket— y mismo indicador
+—IP, dominio, remitente o hash— cuando las dos los tienen). La alerta agrupada conserva el id y la hora de la primera,
+une sin duplicados related_events y entidades, toma la gravedad de regla más alta y lleva `group` {count, alert_ids,
+first_seen, last_seen, window_min, shared_keys}. En todo el dataset salen 13 grupos (56 alertas); en la muestra de
+150, ninguno. Se ve en directo (kanban, ficha, columna «Agrupa») y el informe N2 lleva todos los alert_ids.
+Esto es deduplicación; agrupar alertas distintas de un mismo ataque (incidentes, nivel 2) sigue pendiente.
+
 **Siguiente: agrupar alertas en incidentes (`incident_id`, política §6).** Ejemplo claro en la muestra: los tres
 accesos VPN de Logisoft (11, 18 y 25 de octubre, domingos de madrugada desde el mismo ASN) son un mismo incidente.

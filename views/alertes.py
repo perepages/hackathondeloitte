@@ -116,7 +116,8 @@ def render_list() -> bool:
         "Conclusió": ui.VERDICT_LABEL[r["verdict"]],
         "Origen": r["source_product"],
         "Quan": ui.fmt_time(r["created_at"])[5:16],
-    } for r in filt], columns=[" ", "Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan"])
+        "Agrupa": f"{ui.group_count(r)} alertes" if ui.group_count(r) > 1 else "",
+    } for r in filt], columns=[" ", "Gravetat", "Estat", "Què ha detectat", "Conclusió", "Origen", "Quan", "Agrupa"])
     st.dataframe(ui.style_queue(df), hide_index=True, use_container_width=True,
                  height=min(390, 38 + 35 * max(1, len(df))), on_select="rerun", selection_mode="single-cell",
                  key="cola_tabla",
@@ -146,6 +147,12 @@ def render_detail(r: dict, scroll: bool) -> None:
     st.caption(f"{ui.fmt_time(r['created_at'])} · origen {r['source_product']} · alerta {r['alert_id']} · "
                f"regla {r['rule_id']} · tècnica MITRE {mitre.get('technique_id', '—')} {mitre.get('technique', '')}")
     ui.stepper(r)
+    if g := r.get("group"):
+        st.info(f"**Aquest cas agrupa {g['count']} alertes del mateix esdeveniment**: mateixa regla i mateixes dades "
+                f"clau ({', '.join(g.get('shared_keys') or []) or 'entitats compartides'}) en menys de "
+                f"{g.get('window_min', 5):g} minuts, de {ui.fmt_time(g.get('first_seen', ''))[11:16]} a "
+                f"{ui.fmt_time(g.get('last_seen', ''))[11:16]}. S'han analitzat una sola vegada. "
+                f"Alertes: {', '.join(g['alert_ids'])}.", icon=":material/stacks:")
 
     if r["injection_flags"]:
         st.error("**Intent d'enganyar el sistema.** El contingut d'aquesta alerta inclou instruccions adreçades a "

@@ -369,6 +369,11 @@ def is_ot(view: dict) -> bool:
     return any(c["kind"] == "asset" and c["data"].get("zone") == "LOGISTICS-OT" for c in view.get("contexts", []))
 
 
+def group_count(view: dict) -> int:
+    """Quantes alertes originals representa (correlació de nivell 1); 1 si no n'agrupa cap."""
+    return int(((view.get("group") or (view.get("alert") or {}).get("group") or {}).get("count")) or 1)
+
+
 def live_card(view: dict, state: str, calls: list[dict] | None = None) -> str:
     """Tarjeta del kanban del directo. state: 'in' | 'work' | 'close' | 'esc'. Solo HTML nuestro + texto escapado."""
     resolved = state in ("close", "esc")
@@ -381,6 +386,8 @@ def live_card(view: dict, state: str, calls: list[dict] | None = None) -> str:
         body += '<div class="kq muted"><span></span><span>comprovant…</span></div>'
     if resolved:
         body = f'<div class="kc">{verdict_badge(view["verdict"])}{severity_badge(view["severity"])}</div>'
+    if (n := group_count(view)) > 1:
+        body = f'<div class="km"><b>{n} alertes agrupades</b> (mateix esdeveniment)</div>' + body
     return (f'<div class="kcard{" work" if state == "work" else ""}" style="border-left-color:{border}">'
             f'<div class="kt">{esc(view.get("rule_name", ""))}</div>'
             f'<div class="km">{esc(view.get("source_product", ""))} · {esc(fmt_time(view.get("created_at", ""))[5:16])}</div>'
