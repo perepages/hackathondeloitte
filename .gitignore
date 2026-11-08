@@ -5,3 +5,6 @@ __pycache__/
 *.py[cod]
 *.db
 .streamlit/secrets.toml
+
+# Documentos internos del equipo (solo en local)
+docs/

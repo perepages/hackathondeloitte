@@ -215,8 +215,6 @@ incidentes, la lectura de ficheros con errores, el ticket contra el esquema de D
 | Trampas de manipulación de la IA | 15/15 detectadas |
 | Ensayo en directo (26 alertas contra la API) | 26/26 conclusiones correctas · 4/4 incidentes |
 
-El detalle está en [`docs/NOTAS_DEFENSA.md`](docs/NOTAS_DEFENSA.md).
-
 ---
 
 ## 📂 Estructura del proyecto
@@ -236,7 +234,6 @@ El detalle está en [`docs/NOTAS_DEFENSA.md`](docs/NOTAS_DEFENSA.md).
 * `soc_api.py` · `schemas.py`: cliente de la API y modelos Pydantic.
 * `data/fixture.json`: 150 alertas triadas para el modo muestra (se regenera con `scripts/build_fixture.py`).
 * `demo/`: alertas de Deloitte y fichero de prueba con errores.
-* `docs/`: notas de la defensa y guion del vídeo.
 * `tests/`: suite de pytest.
 
 ---
