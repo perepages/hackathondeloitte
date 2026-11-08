@@ -45,13 +45,17 @@ import time
 from typing import Callable
 
 import streamlit as st
+from dotenv import load_dotenv
 
 from core import store
 from policy import criticality_ca
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# El .env, ANTES de leer SOC_MODE, SOC_EXAMPLES y SOC_WORKERS (antes solo lo cargaban assistant.py y soc_api.py, que
+# se importan después, y estas tres se quedaban con el valor por defecto). No pisa lo que ya venga del entorno.
+load_dotenv(os.path.join(ROOT, ".env"))
 FIXTURE = os.path.join(ROOT, "data", "fixture.json")
-MODE = os.getenv("SOC_MODE", "fixture").lower()
+MODE =os.getenv("SOC_MODE", "fixture").lower()
 USE_EXAMPLES = os.getenv("SOC_EXAMPLES", "1") != "0"
 
 # asset_criticality no está: la calcula to_view con el inventario (las reglas ponían «Media» si no había activo)
@@ -230,7 +234,12 @@ def _triage_one(alert_id: str, alert: dict | None = None) -> dict:
         raise SkippedAlert(f"error de l'API del SOC: {str(exc)[:120]}") from exc
     if USE_EXAMPLES and (ej := _example_fields(preview["alert"])):
         preview["_ejemplo"] = ej
-    return to_view(preview)
+    view = to_view(preview)
+    if (alert or {}).get("_from_file"):
+        view["decision_notes"] = ["L'API del SOC no coneixia aquesta alerta: s'ha triat amb les dades del fitxer i el "
+                                  "context que sí té l'API (equips, usuaris, intel·ligència, registres)."] \
+                                 + view["decision_notes"]
+    return view
 
 
 def _store_live(view: dict) -> None:
@@ -292,6 +301,22 @@ def parse_alert_file(content: bytes | str) -> tuple[list[str], list[dict]]:
     return ids, skipped
 
 
+def alerts_in_file(content: bytes | str) -> dict[str, dict]:
+    """Las alertas completas del fichero, por id (las líneas rotas no). Sirven para triar una alerta que la API del
+    SOC no conoce: el día de la defensa el fichero puede traer alertas que no estén cargadas en la API."""
+    if isinstance(content, bytes):
+        content = content.decode("utf-8", errors="replace")
+    out = {}
+    for line in content.lstrip("﻿").splitlines():
+        try:
+            obj = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("alert_id"), str) and obj.get("rule_id"):
+            out.setdefault(obj["alert_id"].strip(), {**obj, "alert_id": obj["alert_id"].strip()})
+    return out
+
+
 def load_alert_ids_from_jsonl(content: bytes | str) -> list[str]:
     """IDs válidos de un JSONL de alertas (las líneas rotas se saltan; ver parse_alert_file)."""
     return parse_alert_file(content)[0]
@@ -300,7 +325,7 @@ def load_alert_ids_from_jsonl(content: bytes | str) -> list[str]:
 # ----------------------------------------------------------------------------- directo
 
 def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: float = 0.35,
-               workers: int | None = None) -> list[dict]:
+               workers: int | None = None, provided: dict[str, dict] | None = None) -> list[dict]:
     """Tría una lista y avisa de cada paso con los eventos del contrato:
     alert_started -> api_call (uno por consulta) -> verdict | error ... -> done.
 
@@ -349,10 +374,12 @@ def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: fl
             alert_id = futures[future]
             try:
                 fetched[alert_id] = future.result()
-            except SkippedAlert as exc:
-                on_event({"type": "error", "alert_id": alert_id, "message": str(exc)})
             except Exception as exc:
-                on_event({"type": "error", "alert_id": alert_id, "message": f"error en llegir-la: {str(exc)[:120]}"})
+                if alert_id in (provided or {}):  # la API no la té (o no respon): es tria amb les dades del fitxer
+                    fetched[alert_id] = {**provided[alert_id], "_from_file": True}
+                    continue
+                msg = str(exc) if isinstance(exc, SkippedAlert) else f"error en llegir-la: {str(exc)[:120]}"
+                on_event({"type": "error", "alert_id": alert_id, "message": msg})
 
     # 2) Correlación de nivel 1: el mismo evento repetido en la ventana -> una sola alerta (antes de la IA)
     grouped = correlation.correlate([fetched[a] for a in dict.fromkeys(alert_ids) if a in fetched])
@@ -392,6 +419,13 @@ def run_triage(alert_ids: list[str], on_event: Callable[[dict], None], pause: fl
 # ----------------------------------------------------------------------------- contención (nivel 4)
 
 NO_APPROVAL = {"block_ioc", "purge_email"}
+# Nuestros nombres de acción (los de la política y el ticket) -> los que acepta la API de Deloitte
+# (mock_soc_api.VALID). Sin esto, la API respondía «acción no soportada» al ejecutarlas.
+API_ACTION = {"disable_account": "disable_user", "disable_cloud_keys": "disable_access_key"}
+
+
+def api_action(action: str) -> str:
+    return API_ACTION.get(action, action)
 
 
 def approve(action: str, target: str, approver: str, reason: str) -> str:
@@ -399,19 +433,25 @@ def approve(action: str, target: str, approver: str, reason: str) -> str:
     if MODE == "fixture":
         return f"APR-SIMULADO-{abs(hash((action, target))) % 10**6:06d}"
     import httpx, soc_api
-    r = httpx.post(f"{soc_api.BASE_URL}/approvals", json={"action": action, "target": target,
+    r = httpx.post(f"{soc_api.BASE_URL}/approvals", json={"action": api_action(action), "target": target,
                                                           "approver": approver, "reason": reason}, timeout=15)
     r.raise_for_status()
     return r.json()["approval_token"]
 
 
-def contain(action: str, target: str, justification: str, token: str = "") -> dict:
-    """Ejecuta la contención en la API simulada. Simulado en modo fixture."""
+def ticket_id(row: dict) -> str:
+    """El ticket on queda registrada l'alerta: el de l'incident si en forma part (política §6), si no el seu."""
+    return f"TKT-{row.get('incident_id') or row['alert_id']}"
+
+
+def contain(action: str, target: str, justification: str, token: str = "", ticket: str = "") -> dict:
+    """Ejecuta la contención en la API simulada (con el ticket, para la trazabilidad). Simulado en modo fixture."""
     if MODE == "fixture":
-        return {"action": action, "target": target, "result": "ok (simulado, modo fixture)"}
+        return {"action": action, "target": target, "ticket_id": ticket, "result": "ok (simulado, modo fixture)"}
     import httpx, soc_api
-    r = httpx.post(f"{soc_api.BASE_URL}/containment/{action}", json={
-        "target": target, "justification": justification, "approval_token": token}, timeout=15)
+    r = httpx.post(f"{soc_api.BASE_URL}/containment/{api_action(action)}", json={
+        "target": target, "justification": justification, "approval_token": token, "ticket_id": ticket},
+        timeout=15)
     r.raise_for_status()
     return r.json()
 
@@ -428,6 +468,12 @@ def action_plan(view: dict):
     """Plan de acción redactado por el LLM, a trozos (para st.write_stream). El LLM solo redacta: no decide."""
     import assistant
     return assistant.action_plan(view)
+
+
+def plan_in_catalan(text: str) -> str:
+    """El plan, traducido al catalán si la IA lo escribió en castellano (si no, igual)."""
+    import assistant
+    return assistant.to_catalan_text(text)
 
 
 # ----------------------------------------------------------------------------- alertas para el directo

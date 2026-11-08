@@ -1,6 +1,6 @@
 # Estado actual del proyecto · Triaje N1 Tarvia (reto Deloitte × UAB The Hack)
 
-8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **130 tests en verde** · Streamlit 1.65
+8 nov 2026 · rama `perebranch` = `main` (incluye `11a4b0a` de Marc: radio sí, su cambio de gravedad revertido) · **154 tests en verde** · contención envía `ticket_id` · castellanismos corregidos (`fix_slips`) · Streamlit 1.65
 
 ## 1. En una frase
 
@@ -33,10 +33,10 @@ copy .env.example .env          # y poner LLM_API_KEY
 # modo muestra (por defecto): 150 alertas ya triadas, sin API ni IA
 .venv\Scripts\python.exe -m streamlit run app.py
 
-# modo directo: primero la API de Deloitte (con el Python del sistema, que es el que tiene FastAPI)
+# modo directo: primero la API de Deloitte (FastAPI y uvicorn ya están en requirements.txt)
 #   desde DTT-UAB-The-Hack\06_herramientas:
-python -m uvicorn mock_soc_api:app --port 8000
-#   y la app:
+..\..\hackathondeloitte\.venv\Scripts\python.exe -m uvicorn mock_soc_api:app --port 8000
+#   y la app (o poner SOC_MODE=live en el .env, que ahora sí se lee):
 $env:SOC_MODE="live"; .venv\Scripts\python.exe -m streamlit run app.py
 
 # tests
@@ -160,7 +160,7 @@ La base es de arquitectura: la IA solo propone y redacta; la política decide. E
 2. **Detector** en toda la alerta (no solo `evidence`), castellano/catalán/inglés. Dos tipos: `instruccio` (órdenes →
    ataque real y escalar) y `ocultacio` (texto escondido → escalar). UC-AI-001: las frases del cliente al asistente
    solo cuentan si van dirigidas al clasificador. Ver abajo.
-3. **Acciones**: un objetivo que no sale en los datos se descarta; bloquear un dominio propio, IP interna, equipo del
+3. **Acciones**: un objetivo que no sale en los datos, o que no es del tipo que pide la acción (cuenta, equipo, indicador, correo, clave cloud), se descarta; bloquear un dominio propio, IP interna, equipo del
    inventario, proveedor legítimo o servicio conocido pide N2; con cualquier sospecha, todo pide N2.
 4. **Citas**: si la IA cita CHG/tickets/IPs/correos que no existen, nota; y si con eso cierra, se escala.
 5. **Pantalla**: el texto de la IA se pinta sin imágenes (exfiltración), sin enlaces clicables ni HTML.
@@ -197,13 +197,14 @@ Tests: `tests/test_injection.py` (29 alertas trampa). Sobre las 138 alertas de e
 
 ## 9. Bugs y limitaciones pendientes
 
-**Bugs conocidos**
-1. `SOC_MODE`, `SOC_EXAMPLES` y `SOC_WORKERS` **no se leen del `.env`**: `core/data.py` los lee al importarse, antes
-   de que se cargue el `.env`. Hoy solo funcionan como variable de entorno al arrancar. (`SOC_DEDUP_WINDOW_MIN` sí,
-   porque se lee en el momento.)
-2. En directo, **la IA a veces responde en castellano** pese al prompt; `plain_text` solo corrige códigos internos.
-   En la muestra se rehicieron a mano.
-3. `requirements.txt` **no incluye FastAPI ni uvicorn**: la API de Deloitte se arranca con el Python del sistema.
+**Bugs arreglados el 8 nov** (antes estaban aquí)
+1. ~~`SOC_MODE`, `SOC_EXAMPLES`, `SOC_WORKERS` no se leían del `.env`~~: `app.py` y `core/data.py` lo cargan primero.
+2. ~~La IA a veces responde en castellano~~ (~4 %, 6 de 138): `assistant.ensure_catalan` lo detecta y pide SOLO una
+   traducción (no vuelve a decidir; ~2 s más). Lo mismo para el plan de acción. `plain_text` atrapa también
+   `cobre_esta_alerta` (la IA lo escribe mal).
+3. ~~`requirements.txt` sin FastAPI ni uvicorn~~: añadidos; la API arranca con el Python del proyecto.
+4. ~~Las acciones `disable_account` y `disable_cloud_keys` no existían en la API de Deloitte~~ («acción no soportada»):
+   `core/data.api_action` las traduce a `disable_user` y `disable_access_key`.
 
 **Limitaciones**
 4. En un caso de verdad dudoso, **la IA puede cambiar de veredicto entre sesiones** (p. ej. la subida a WeTransfer

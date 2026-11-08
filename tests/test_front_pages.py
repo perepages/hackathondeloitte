@@ -175,3 +175,15 @@ def test_informe_n2_de_un_incidente_cumple_el_esquema():
     assert any(f"incident {inc['incident_id']}" in i.value for i in at.info)
     assert any("compleix l'esquema oficial" in s.value for s in at.success)
     assert any(", ".join(inc["alert_ids"]) in c.value for c in at.caption)
+
+
+def test_directo_recuerda_el_ultimo_lote_al_volver():
+    """Al volver a «Triatge en directe» se ve el último lote, no un tablero vacío con alertas de ejemplo."""
+    at = AppTest.from_file(APP, default_timeout=60).run()
+    at.switch_page("views/triatge_directe.py").run()
+    at.button(key="directo_go").click().run()
+    at.switch_page("views/alertes.py").run()
+    at.switch_page("views/triatge_directe.py").run()
+    assert not at.exception, at.exception
+    assert any("Mostrant el resultat de l'últim lot" in i.value for i in at.info)
+    assert any("Alertes que esperen una persona" in m.value for m in at.markdown)

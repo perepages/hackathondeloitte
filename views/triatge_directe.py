@@ -18,20 +18,34 @@ st.markdown('<p class="muted">Així funciona amb alertes noves: entren a la safa
 rows = data.load_results()
 by_id = {r["alert_id"]: r for r in rows}
 
+
+def n_alertes(n: int) -> str:
+    return f"{n} alerta" if n == 1 else f"{n} alertes"
+
+
+def saltat(n: int) -> str:
+    return "s'ha saltat" if n == 1 else "s'han saltat"
+
 with st.expander("Fer servir les meves alertes (opcional)"):
     c1, c2 = st.columns(2)
     up = c1.file_uploader("Fitxer d'alertes (JSONL)", type=["jsonl", "json"], key="directo_file")
     pasted = c2.text_area("…o enganxa identificadors d'alerta, un per línia", key="directo_ids", height=100)
 file_skipped: list[dict] = []
+provided: dict[str, dict] = {}
 if up:
     ids, file_skipped = data.parse_alert_file(up.getvalue())
+    provided = data.alerts_in_file(up.getvalue())  # si l'API no en coneix alguna, es tria amb les dades del fitxer
 else:
     ids = list(dict.fromkeys(l.strip() for l in pasted.splitlines() if l.strip()))
 if file_skipped:
-    st.warning(f"{len(file_skipped)} alerta(es) del fitxer s'han saltat per algun error.")
+    st.warning(f"{n_alertes(len(file_skipped))} del fitxer {saltat(len(file_skipped))} per algun error.")
     with st.expander("Veure quines línies s'han saltat i per què"):
         st.dataframe([{"Línia": x["line"], "Motiu": x["reason"]} for x in file_skipped], hide_index=True,
                      use_container_width=True)
+# Al tornar a aquesta pàgina el fitxer pujat ja no hi és (Streamlit l'oblida en canviar de pàgina): si no hi ha
+# fitxer ni llista nous, es mostra el resultat de l'últim lot en lloc d'un tauler buit amb alertes d'exemple.
+last = st.session_state.get("directo_last")
+restored = bool(last) and not up and not ids
 if up and not ids:
     st.error("El fitxer no té cap alerta vàlida per triar.")
 elif not ids:
@@ -40,15 +54,31 @@ elif not ids:
     except Exception as exc:  # p. ej. la API de Deloitte no está arrancada (modo live)
         st.error(f"No he pogut demanar alertes a l'API del SOC: {exc}")
         ids = []
-    st.caption(f"Sense fitxer ni llista: es faran servir {len(ids)} alertes d'exemple"
-               + (" de la mostra." if data.MODE == "fixture" else " de la cua real de l'API de Deloitte."))
+    if restored:
+        st.info(f"Mostrant el resultat de l'últim lot ({n_alertes(len(last['ids']))}). Per triar-ne més, carrega "
+                "un fitxer o enganxa identificadors a «Fer servir les meves alertes», o comença amb les "
+                f"{len(ids)} d'exemple.", icon=":material/history:")
+    else:
+        st.caption(f"Sense fitxer ni llista: es faran servir {len(ids)} alertes d'exemple"
+                   + (" de la mostra." if data.MODE == "fixture" else " de la cua real de l'API de Deloitte."))
 
 b1, b2 = st.columns([2, 5], vertical_alignment="center")
-go = b1.button(f"Començar amb {len(ids)} alertes", icon=":material/play_arrow:", type="primary", key="directo_go", use_container_width=True)
-progress = b2.progress(0.0, text=f"0 de {len(ids)} alertes revisades")
+go = b1.button(f"Començar amb {n_alertes(len(ids))}", icon=":material/play_arrow:", type="primary", key="directo_go", use_container_width=True)
+board_ids = last["ids"] if restored and not go else ids
+progress = b2.progress(0.0, text=f"0 de {n_alertes(len(board_ids))} revisades")
 board = st.empty()
 
-state = {"in": list(ids), "work": [], "calls": {}, "close": [], "esc": [], "skipped": [], "groups": {}}
+state = {"in": list(board_ids), "work": [], "calls": {}, "close": [], "esc": [], "skipped": [], "groups": {}}
+
+
+def settle(done_ids: list[str]) -> None:
+    """Columnes finals amb la decisió definitiva: la de cada alerta més la dels incidents (una alerta que sola es
+    tancaria s'escala si forma part d'una cadena d'atac, política §5)."""
+    latest = {r["alert_id"]: r for r in data.load_results()}
+    final = [latest[i] for i in done_ids if i in latest]
+    state["in"], state["work"] = [], []
+    state["close"] = [r for r in final if r["decision"] != "escalate"]
+    state["esc"] = [r for r in final if r["decision"] == "escalate"]
 
 
 def placeholder(alert_id: str) -> dict:
@@ -84,9 +114,9 @@ def paint():
     done = len(state["close"]) + len(state["esc"])
     done += len(state["skipped"])
     absorbed = sum(len(m) - 1 for m in state["groups"].values())  # alertes que ja van dins d'un altre cas
-    total = len(ids) - absorbed
-    text = (f"{done} de {total} casos revisats ({len(ids)} alertes; {absorbed} eren el mateix esdeveniment i "
-            "s'han agrupat)" if absorbed else f"{done} de {total} alertes revisades")
+    total = len(board_ids) - absorbed
+    text = (f"{done} de {total} casos revisats ({n_alertes(len(board_ids))}; {absorbed} eren el mateix esdeveniment "
+            "i s'han agrupat)" if absorbed else f"{done} de {n_alertes(total)} revisades")
     progress.progress(min(1.0, done / max(1, total)), text=text)
 
 
@@ -116,11 +146,18 @@ def on_event(ev: dict):
     paint()
 
 
+if restored and not go:
+    state["groups"], state["skipped"] = last["groups"], last["skipped"]
+    settle(last["done"])
 paint()
 if go:
-    data.run_triage(ids, on_event)
+    results = data.run_triage(ids, on_event, provided=provided)
+    done_ids = [r["alert_id"] for r in results]
+    st.session_state["directo_last"] = {"ids": list(ids), "done": done_ids, "groups": state["groups"],
+                                        "skipped": state["skipped"]}
+    settle(done_ids)  # ara que hi són totes, els incidents poden escalar-ne alguna més
+    paint()
     esc_ids = [r["alert_id"] for r in state["esc"]]
-    st.session_state["directo_ultimo"] = esc_ids
     st.session_state["directo_saltades"] = [{"Alerta": f"línia {x['line']} del fitxer", "Motiu": x["reason"]}
                                             for x in file_skipped] + state["skipped"]
     if esc_ids:
@@ -132,16 +169,21 @@ if go:
 
 skipped_all = st.session_state.get("directo_saltades") or []
 if skipped_all:
-    st.warning(f"{len(skipped_all)} alerta(es) s'han saltat per algun error. La resta s'han triat amb normalitat.")
+    st.warning(f"{n_alertes(len(skipped_all))} {saltat(len(skipped_all))} per algun error. La resta s'han triat "
+               "amb normalitat.")
     with st.expander("Veure quines alertes s'han saltat i per què"):
         st.dataframe(skipped_all, hide_index=True, use_container_width=True)
 
-pending = st.session_state.get("directo_ultimo") or []
+pending = [r["alert_id"] for r in state["esc"]]  # les escalades de l'últim lot, amb la decisió definitiva
+by_incident = sum(1 for r in state["esc"] if r.get("escalated_by_incident"))
 if pending:
     st.markdown('<div id="escaladas"></div>', unsafe_allow_html=True)
     st.divider()
     st.markdown("#### Alertes que esperen una persona")
-    st.caption("Prem una targeta per obrir-la a la safata d'alertes.")
+    why_inc = ("1 s'escala perquè forma part d'una cadena d'atac (incident), encara que sola es tancaria."
+               if by_incident == 1 else f"{by_incident} s'escalen perquè formen part d'una cadena d'atac "
+               "(incident), encara que soles es tancarien.")
+    st.caption("Prem una targeta per obrir-la a la safata d'alertes." + (" " + why_inc if by_incident else ""))
     cols = st.columns(min(len(pending), 4))
     # Resultados recién leídos (no los de `rows`, cargados antes de triar): si una alerta se vuelve a triar,
     # la tarjeta tiene que enseñar la gravedad nueva, la misma que el kanban de arriba.

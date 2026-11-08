@@ -45,3 +45,33 @@ def test_get_alert_uses_the_alert_id_in_the_path(monkeypatch):
 
     assert seen["url"] == "http://soc.test/alerts/ALR-42"
     assert result["alert_id"] == "ALR-42"
+
+
+def test_las_acciones_se_llaman_como_las_acepta_la_api_de_deloitte(monkeypatch):
+    """Nuestros nombres (política/ticket) -> los de mock_soc_api.VALID. Antes la API respondía «acción no soportada»."""
+    import httpx
+    from core import data
+    monkeypatch.setattr(data, "MODE", "live")
+    sent = []
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"approval_token": "APR-1", "result": "ok"}
+
+    monkeypatch.setattr(httpx, "post", lambda url, json, timeout: sent.append((url, json)) or R())
+    data.approve("disable_account", "u@x", "N2", "prova")
+    data.contain("disable_cloud_keys", "AKIA1", "prova", "APR-1")
+    data.contain("isolate_host", "WS-1", "prova", "APR-1")
+    assert sent[0][1]["action"] == "disable_user"
+    assert sent[1][0].endswith("/containment/disable_access_key")
+    assert sent[2][0].endswith("/containment/isolate_host")
+
+
+def test_ticket_id_follows_incident():
+    from core import data
+    assert data.ticket_id({"alert_id": "ALR-1"}) == "TKT-ALR-1"
+    assert data.ticket_id({"alert_id": "ALR-1", "incident_id": "INC-0003"}) == "TKT-INC-0003"
+    assert data.contain("block_ioc", "1.2.3.4", "x", ticket="TKT-ALR-1")["ticket_id"] == "TKT-ALR-1"

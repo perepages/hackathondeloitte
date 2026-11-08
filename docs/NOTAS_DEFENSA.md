@@ -113,6 +113,49 @@ tipo de regla (eso son filtros: dos alertas críticas no son el mismo ataque, y 
 
 ---
 
+## 3c. Ensayo general en modo directo — 8 nov
+
+Simulación del día de la defensa: fichero `demo/prova_directe.jsonl` subido en «Triatge en directe» (API de Deloitte
++ IA real). 26 alertas reales que NO estaban triadas, más una línea rota y un id inventado.
+
+| Grupo | Esperado | Resultado |
+| --- | --- | --- |
+| Línea rota + id que la API no conoce | Saltarlas con aviso, sin parar el lote | ✅ «2 alertes s'han saltat»; las 26 restantes triadas |
+| Intrusión WS-BCN-1770 → FS01 (9) | Ataque, escalar, un incidente | ✅ 9/9 ataque real y escaladas; 1 incidente (9 reglas, 7 fases MITRE) |
+| RAM scraper TPV + C2 (4) | Ataque crítico, aviso de manipulación | ✅ críticas; aviso «Intent d'enganyar el sistema» con el texto del servicio (alerta + log EDR); 1 incidente; todas las acciones piden N2 |
+| Factura falsa + robo de sesión (3) | Ataque, campaña | ✅ 3/3 ataque; 1 incidente (cuenta de Lucía + dominio del phishing) |
+| Atacante de Vela (3) | Incidente que escala las «bajas» | ✅ 1 incidente; las 2 bajas se escalan por la cadena (§5) |
+| Pentest (2) + EDR parado en DC01 (1) | Autorizadas, cerrar | ✅ 3/3 «activitat autoritzada», cerradas, citando CHG-1042 / CHG-1080 |
+| Ruido (4) | Lo que toque | ✅ 4/4 cerradas (Microsoft, fórum, SCCM, relay de móvil) |
+| Informe N2 de un incidente | Ticket único, esquema oficial | ✅ `TKT-INC-…` validado |
+
+**26/26 conclusiones correctas, 4/4 incidentes correctos, 0 ataques cerrados.**
+
+**Lo que encontró el ensayo (y está arreglado y comprobado en directo)**:
+- La IA propuso «desactivar claves cloud» sobre **códigos de descuento filtrados** (`EMPLEADO30`), porque no hay una
+  acción para eso y forzó la más parecida. Ahora cada acción exige un objetivo de su tipo (cuenta, equipo, indicador,
+  correo, clave cloud); lo demás se descarta con una nota. En la muestra también quitó «revocar sesiones» sobre un
+  dominio y sobre el número `161`.
+- El kanban se reiniciaba al volver a la página (10 alertas de ejemplo encima de los resultados): ahora enseña el
+  último lote.
+- El kanban no contaba las alertas escaladas **por el incidente** (17 tarjetas frente a 19 en el Resum): ahora, al
+  terminar el lote, recoloca con la decisión final y explica cuántas se escalan por la cadena.
+- Textos en catalán: «2 alerta(es)», «1 de les 3 alertes ja s'escalaven».
+- **Aprobar y ejecutar** desde la app contra la API de Deloitte: ✅ (aislar WS-BCN-1770 → «Aprovada» → «Feta», con
+  su token en el registro de la API).
+
+**Preparado para el fichero de la defensa** (después del ensayo):
+- Si el JSONL trae alertas que **la API de Deloitte no conoce** (no estén cargadas en ella), ya no se saltan: se trían
+  con los datos del propio fichero y el contexto que sí tiene la API (equipos, usuarios, inteligencia, registros), y la
+  ficha lo dice. Probado con una copia del TPV con un id nuevo: crítica, escalada, trampa detectada. Solo se salta lo
+  que no tiene ni regla (no hay con qué triarlo), con aviso.
+- El ticket para N2 explica **qué muestra cada registro** (p. ej. «connect · src_ip=77.90.185.20 · user=ext.logisoft ·
+  bytes=0 · country=LT»), no solo su tipo, como pide el campo `finding` del esquema.
+
+**Resuelto después**: los castellanismos sueltos de la IA («portátil», «usuario», «contraseña»…) se corrigen con una lista fija fuera de las citas «…» (`assistant.fix_slips`), y al ejecutar una acción se envía a la API el `ticket_id` (el del incidente si la alerta forma parte de uno, política §6), para que el registro de contención sea trazable.
+
+---
+
 ## 4. Errores y problemas que nos hemos encontrado (y qué hicimos)
 
 | Problema | Cómo lo vimos | Qué hicimos |
@@ -128,7 +171,11 @@ tipo de regla (eso son filtros: dos alertas críticas no son el mismo ataque, y 
 | Primera versión de incidentes: en el peor caso, **un «incidente» de 5 064 alertas** (los remitentes de newsletters encadenaban cuentas de toda la empresa) | Prueba de peor caso | Límite de popularidad para todas las pistas → máximo 79 |
 | Nombres de cuenta y ficheros tomados por dominios (`adm.aortega`, `install.mjs`) | Revisar las pistas de cada incidente | Solo terminaciones de dominio reales |
 | La página Incidents existía pero agrupaba por un `incident_id` que nadie rellenaba (y buscaba usuarios por un campo que no existe) | Al integrar | Rehecha sobre los incidentes reales del back |
-| La IA a veces responde en **castellano** pese a pedir catalán | Pruebas en directo | Pendiente (en la muestra se rehicieron a mano) |
+| La IA a veces responde en **castellano** pese a pedir catalán (6 de 138, ~4 %) | Medido sobre los escenarios | Se detecta y se pide SOLO una traducción: el veredicto no cambia (~2 s más) |
+| La IA escribía mal un campo interno (`cobre_esta_alerta`) y se colaba en pantalla | Leyendo sus respuestas | El filtro lo atrapa con y sin faltas |
+| **Las acciones «deshabilitar cuenta» y «desactivar claves cloud» no existían en la API de Deloitte** (se llaman `disable_user` y `disable_access_key`): en directo habrían fallado al ejecutarlas | Leyendo la documentación de la API | Traducción de nombres al llamar a la API, probado contra la API real |
+| `SOC_MODE` y otras opciones no se leían del `.env` (se podía arrancar la demo en el modo equivocado) | Revisión | El `.env` se carga antes que nada |
+| Faltaban FastAPI y uvicorn en `requirements.txt` (la API no arrancaba en un equipo limpio) | Revisión | Añadidos |
 | En un caso de verdad dudoso, **la IA puede cambiar de veredicto** entre ejecuciones | 3 pasadas sobre las mismas alertas | La decisión ya no depende del azar con el mismo veredicto; votar 3 veces sería 3× más lento |
 
 ---

@@ -6,3 +6,6 @@ pytest>=8,<9
 pandas>=2,<3
 altair>=5,<6
 jsonschema>=4,<5
+# API simulada de Deloitte (DTT-UAB-The-Hack/06_herramientas/mock_soc_api.py), con el mismo Python que la app
+fastapi>=0.110
+uvicorn>=0.29

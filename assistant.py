@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from typing import Iterator
 
 import httpx
@@ -270,7 +271,109 @@ def decide_json(result: dict) -> dict:
     c = config()
     messages = build_decision_messages(result)
     text = _complete_openai(c, messages) if c["provider"] == "openai" else _complete_ollama(c, messages)
-    return parse_json_object(text)
+    return ensure_catalan(parse_json_object(text))
+
+
+# ----------------------------------------------------------------------------- idioma: la interfaz es en catalán
+
+# Palabras que delatan cada idioma (las que no comparten). La IA responde en castellano ~4 % de las veces aunque el
+# prompt pide catalán (medido sobre 138 alertas de escenario): lo detectamos y pedimos SOLO una traducción.
+_CA = re.compile(r"\b(i|amb|els|les|és|però|perquè|aquesta|aquest|aquests|cap a|des de|ha estat|hi ha|no hi|s'ha|"
+                 r"l'alerta|l'usuari|l'equip|d'un|d'una)\b", re.I)
+_ES = re.compile(r"\b(y|con|los|las|es|pero|porque|esta|este|estos|hacia|desde|ha sido|hay|no hay|se ha|la alerta|"
+                 r"el usuario|el equipo|mediante|también|sin)\b", re.I)
+
+TRANSLATE_PROMPT = (
+    "Ets un traductor. Tradueix al CATALÀ tots els textos que estiguin en castellà dins del JSON que reps. Mantén "
+    "exactament les mateixes claus i l'estructura, i no canviïs noms propis, IPs, dominis, hashes, codis (CHG-…, "
+    "ALR-…, T1059…) ni cites literals entre «». No afegeixis ni treguis informació. Respon NOMÉS amb el JSON.")
+
+
+def looks_spanish(text: str) -> bool:
+    """¿Está en castellano? (más palabras propias del castellano que del catalán, y al menos dos)."""
+    es, ca = len(_ES.findall(text or "")), len(_CA.findall(text or ""))
+    return es >= 2 and es > ca
+
+
+def _text_fields(raw: dict) -> dict:
+    out = {k: raw[k] for k in ("title", "summary", "justification") if isinstance(raw.get(k), str) and raw[k]}
+    acts = raw.get("recommended_actions")
+    if isinstance(acts, list):
+        out["actions"] = [str(a.get("justification") or "") if isinstance(a, dict) else "" for a in acts]
+    return out
+
+
+# Castellanismos sueltos que el modelo cuela en textos que por lo demás están en catalán (vistos en el ensayo en
+# directo). Solo palabras sin ambigüedad; no se tocan las citas literales entre «».
+SLIPS = {"portátil": "portàtil", "portátiles": "portàtils", "también": "també", "contraseña": "contrasenya",
+         "contraseñas": "contrasenyes", "sospechoso": "sospitós", "sospechosa": "sospitosa", "dispositivo": "dispositiu",
+         "usuario": "usuari", "usuarios": "usuaris", "mediante": "mitjançant"}
+_SLIP_RE = re.compile(r"\b(" + "|".join(sorted(SLIPS, key=len, reverse=True)) + r")\b", re.I)
+
+
+def fix_slips(text: str) -> str:
+    """Corrige los castellanismos de SLIPS fuera de las citas «…» (respeta la mayúscula inicial)."""
+    def fix(m):
+        new = SLIPS[m.group(0).lower()]
+        return new[0].upper() + new[1:] if m.group(0)[0].isupper() else new
+    parts = re.split(r"(«[^»]*»)", text or "")
+    return "".join(p if p.startswith("«") else _SLIP_RE.sub(fix, p) for p in parts)
+
+
+def _fix_all(raw: dict) -> dict:
+    out = {k: fix_slips(v) if k in ("title", "summary", "justification") and isinstance(v, str) else v
+           for k, v in raw.items()}
+    if isinstance(out.get("recommended_actions"), list):
+        out["recommended_actions"] = [{**a, "justification": fix_slips(a["justification"])}
+                                      if isinstance(a, dict) and isinstance(a.get("justification"), str) else a
+                                      for a in out["recommended_actions"]]
+    return out
+
+
+def ensure_catalan(raw: dict) -> dict:
+    """Si algún texto de la propuesta salió en castellano, lo traduce (una llamada más, solo textos: el veredicto,
+    la decisión y las acciones no se tocan). Si la traducción falla, se queda el original. Siempre se corrigen los
+    castellanismos sueltos (SLIPS)."""
+    raw = _fix_all(raw)
+    fields = _text_fields(raw)
+    texts = [v for v in fields.values() if isinstance(v, str)] + list(fields.get("actions", []))
+    if not any(looks_spanish(t) for t in texts):
+        return raw
+    try:
+        c = config()
+        messages = [{"role": "system", "content": TRANSLATE_PROMPT},
+                    {"role": "user", "content": json.dumps(fields, ensure_ascii=False)}]
+        reply = _complete_openai(c, messages) if c["provider"] == "openai" else _complete_ollama(c, messages)
+        done = parse_json_object(reply)
+    except Exception:  # sin traducción, mejor el texto original que nada
+        return raw
+    out = dict(raw)
+    for k in ("title", "summary", "justification"):
+        if isinstance(done.get(k), str) and done[k].strip() and k in fields:
+            out[k] = done[k]
+    acts, new = raw.get("recommended_actions"), done.get("actions")
+    if isinstance(acts, list) and isinstance(new, list) and len(new) == len(acts):
+        out["recommended_actions"] = [{**a, "justification": str(j)} if isinstance(a, dict) and j else a
+                                      for a, j in zip(acts, new)]
+    out = _fix_all(out)
+    out["_translated"] = True
+    return out
+
+
+def to_catalan_text(text: str) -> str:
+    """El plan de acción (Markdown) en catalán si salió en castellano; si no, igual. Si falla, el original."""
+    if not looks_spanish(text):
+        return text
+    try:
+        c = config()
+        messages = [{"role": "system", "content": TRANSLATE_PROMPT.replace("dins del JSON que reps", "del text que "
+                     "reps (Markdown)").replace("les mateixes claus i l'estructura", "el format Markdown")
+                     .replace("Respon NOMÉS amb el JSON.", "Respon NOMÉS amb el text traduït.")},
+                    {"role": "user", "content": text}]
+        reply = _complete_openai(c, messages) if c["provider"] == "openai" else _complete_ollama(c, messages)
+        return reply.strip() or text
+    except Exception:
+        return text
 
 
 def action_plan(result: dict) -> Iterator[str]:

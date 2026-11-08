@@ -235,6 +235,55 @@ def protected_reason(target: str, preview: dict, legit_domains=()) -> str | None
     return None
 
 
+HEX_HASH = re.compile(r"^(?:[a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})$", re.I)
+MSG_ID = re.compile(r"^<[^<>\s]+@[^<>\s]+>$")
+EMAIL = re.compile(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$")
+ACCESS_KEY = re.compile(r"^(?:AKIA|ASIA|AIDA|AROA)[A-Z0-9]{12,24}$")
+HOSTNAME = re.compile(r"^[A-Za-z][A-Za-z0-9-]{1,40}$")
+ACCOUNT = re.compile(r"^[a-z][a-z0-9._-]{2,63}$")
+CUSTOMER = re.compile(r"^C\d{4,}$")
+
+
+def _is_ip(t: str) -> bool:
+    try:
+        ipaddress.ip_address(t)
+        return True
+    except ValueError:
+        return False
+
+
+def _is_domain(t: str) -> bool:
+    from incidents import TLDS
+    t = t.lower().strip(".")
+    return "." in t and "@" not in t and not _is_ip(t) and t.rsplit(".", 1)[-1] in TLDS
+
+
+def target_type_problem(action: str, target: str, alert: dict | None = None) -> str | None:
+    """Por qué el objetivo no es del tipo que pide la acción (o None si encaja). La IA, cuando no hay una acción para
+    lo que quiere hacer (p. ej. invalidar un código de descuento filtrado), fuerza la más parecida: «desactivar claves
+    cloud» sobre «EMPLEADO30», o «revocar sesiones» sobre un dominio. Eso no se ejecuta nunca."""
+    t = str(target).strip()
+    ent = (alert or {}).get("entities") or {}
+    cloud = ent.get("cloud") if isinstance(ent.get("cloud"), dict) else {}
+    cloud_names = {str(v) for k, v in cloud.items() if k in ("identity", "new_user", "access_key", "user") and v}
+    hosts = {str(h.get("hostname") if isinstance(h, dict) else h).lower() for h in ent.get("hosts") or []}
+    if action == "purge_email":
+        return None if MSG_ID.match(t) or EMAIL.match(t) else "no és un correu (cal un message_id)"
+    if action == "block_ioc":
+        ok = _is_ip(t) or _is_domain(t) or HEX_HASH.match(t) or EMAIL.match(t) or t.lower().startswith(("http://", "https://"))
+        return None if ok else "no és un indicador (IP, domini, hash o URL)"
+    if action == "isolate_host":
+        return None if _is_ip(t) or t.lower() in hosts or (HOSTNAME.match(t) and not _is_domain(t)) \
+            else "no és un equip"
+    if action in ("revoke_sessions", "reset_password", "disable_account"):
+        ok = (EMAIL.match(t) or CUSTOMER.match(t) or t in cloud_names
+              or (ACCOUNT.match(t.lower()) and not _is_domain(t) and not t.isdigit() and not _is_ip(t)))
+        return None if ok and not t.isdigit() else "no és un compte, un client ni una sessió"
+    if action == "disable_cloud_keys":
+        return None if ACCESS_KEY.match(t) or t in cloud_names else "no és una clau ni una identitat del núvol"
+    return None
+
+
 # ----------------------------------------------------------------------------- 4. lo que cita la IA
 
 CITATION = re.compile(

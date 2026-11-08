@@ -108,3 +108,28 @@ def test_taula_d_entitats_amb_les_tres_formes_del_dataset():
     assert rows["Sessió de l'assistent"] == "ai-c07inj0001"
     assert rows["Client"] == "C1 (víctima)"
     assert ui.main_entity({"alert": alert}) == "Bucket: tarvia-backups-prod"
+
+
+def test_alerta_que_la_api_no_conoce_se_tria_con_los_datos_del_fichero(monkeypatch):
+    """El día de la defensa el fichero puede traer alertas que no estén cargadas en la API: no se saltan."""
+    from core import data
+    content = ('{"alert_id": "ALR-NOVA-1", "rule_id": "UC-EDR-001", "rule_name": "Nova", "severity": "high", '
+               '"created_at": "2026-11-08T10:00:00Z"}\n{"alert_id": "ALR-SENSE-REGLA"}\n')
+    provided = data.alerts_in_file(content)
+    assert list(provided) == ["ALR-NOVA-1"]  # sin regla no hay con qué triarla
+    monkeypatch.setattr(data, "MODE", "live")
+
+    def no_api(alert_id):
+        raise data.SkippedAlert("l'API del SOC no reconeix aquesta alerta")
+    seen = {}
+
+    def fake_triage(alert_id, alert=None):
+        seen[alert_id] = alert
+        return {"alert_id": alert_id, "queries": [], "decision": "escalate"}
+    monkeypatch.setattr(data, "_fetch_alert", no_api)
+    monkeypatch.setattr(data, "_triage_one", fake_triage)
+    monkeypatch.setattr(data, "_store_live", lambda view: None)
+    events = []
+    res = data.run_triage(["ALR-NOVA-1", "ALR-SENSE-REGLA"], events.append, provided=provided)
+    assert [r["alert_id"] for r in res] == ["ALR-NOVA-1"] and seen["ALR-NOVA-1"]["_from_file"]
+    assert [e["alert_id"] for e in events if e["type"] == "error"] == ["ALR-SENSE-REGLA"]

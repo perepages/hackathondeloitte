@@ -13,9 +13,14 @@ Incidents ya está en el menú: los incidentes los calcula el back de verdad (in
 """
 import os
 
-import streamlit as st
+from dotenv import load_dotenv
 
-from core import data, ui
+# Lo primero: el .env (SOC_MODE, SOC_DEV…) antes de importar nada que lo lea. No pisa lo que venga del entorno.
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+import streamlit as st  # noqa: E402
+
+from core import data, ui  # noqa: E402
 
 st.set_page_config(page_title="Tarvia · Triatge d'alertes", page_icon=":material/shield:", layout="wide")
 ui.inject_css()

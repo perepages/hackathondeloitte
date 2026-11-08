@@ -1,4 +1,10 @@
+import os
+
 import pytest
+
+# Los tests corren siempre sobre la muestra, aunque el .env de quien los lance diga SOC_MODE=live
+# (load_dotenv no pisa una variable que ya existe).
+os.environ.setdefault("SOC_MODE", "fixture")
 
 
 @pytest.fixture(autouse=True)

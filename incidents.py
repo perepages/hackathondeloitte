@@ -278,7 +278,8 @@ def _summarize(members: list[dict], shared: set[tuple[str, str]]) -> dict:
         reasons.append(f"cadena d'atac: {len(attack_rules)} regles diferents amb conclusió d'atac "
                        f"({len(tactics)} fases MITRE) — política del SOC §5")
     if escalated:
-        reasons.append(f"{len(escalated)} de les {len(members)} alertes ja s'escalaven per si soles")
+        reasons.append(f"1 de les {len(members)} alertes ja s'escalava per si sola" if len(escalated) == 1 else
+                       f"{len(escalated)} de les {len(members)} alertes ja s'escalaven per si soles")
     decision = "escalate" if chain or escalated else "close"
 
     accounts = sorted({v for k, v in shared if k == "compte"})

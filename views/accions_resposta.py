@@ -98,7 +98,7 @@ def render_actions(view: dict, j: str) -> None:
                 if st.button("Executar", type="primary", key=f"contencion_run_{j}_{i}"):
                     try:
                         res = data.contain(act["action"], act["target"], act.get("justification", ""),
-                                           st_.get("token", ""))
+                                           st_.get("token", ""), data.ticket_id(view))
                         state[key] = {**st_, "estado": "ejecutada"}
                         record(view, act, str(res.get("result", "ok")), st_.get("aprobador", "—"))
                     except Exception as exc:  # p. ej. 403 de la API por falta de aprobación

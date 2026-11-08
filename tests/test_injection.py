@@ -215,3 +215,42 @@ def test_dataset_completo_solo_marca_las_trampas():
     # 12 correos de la factura falsa con texto oculto + 3 TPV con el servicio que «está autorizado»
     assert len(marked) == 15
     assert all(rule.startswith(("UC-EML", "UC-EDR-012")) and "instruccio" in kinds for rule, kinds in marked.values())
+
+
+# ----------------------------------------------------------------------------- tipo de objetivo de cada acción
+
+@pytest.mark.parametrize("action,target,ok", [
+    ("disable_cloud_keys", "EMPLEADO30", False),          # código de descuento filtrado, no una clave (caso real)
+    ("disable_cloud_keys", "AKIATARVIA7XQ2DEPLY", True),
+    ("revoke_sessions", "tempmail-box.example", False),   # un dominio no tiene sesiones
+    ("revoke_sessions", "161", False),                    # de «161 cuentas»
+    ("revoke_sessions", "ai-c07inj0001", True),
+    ("reset_password", "C700675", True),
+    ("reset_password", "laura.ferrer2@tarvia.example", True),
+    ("isolate_host", "POS-T07-01", True),
+    ("isolate_host", "evil.example", False),
+    ("block_ioc", "POS-T07-01", False),
+    ("block_ioc", "203.0.113.160", True),
+    ("purge_email", "<a1@x.example>", True),
+    ("purge_email", "x.example", False),
+])
+def test_el_objetivo_tiene_que_ser_del_tipo_que_pide_la_accion(action, target, ok):
+    assert (guard.target_type_problem(action, target, {}) is None) is ok
+
+
+def test_la_ia_no_desactiva_claves_cloud_sobre_codigos_de_descuento(monkeypatch):
+    tp = {**FOOLED, "verdict": "true_positive", "decision": "escalate", "recommended_actions": [
+        {"action": "disable_cloud_keys", "target": "EMPLEADO30"},
+        {"action": "revoke_sessions", "target": "ai-c07inj0001"}]}
+    out = _decide(_preview(rule_id="UC-AI-002", evidence={"follow_up": "va revelar EMPLEADO30"},
+                           entities={"ai_session": "ai-c07inj0001"}), tp, monkeypatch)
+    acts = _acts(out)
+    assert ("disable_cloud_keys", "EMPLEADO30") not in acts and ("revoke_sessions", "ai-c07inj0001") in acts
+    assert any("no és una clau" in n for n in out.decision_notes)
+
+
+def test_las_aclaraciones_no_se_repiten_si_la_accion_pasa_dos_veces(monkeypatch):
+    first = verdict._actions([{"action": "block_ioc", "target": "mega.nz", "justification": "x"}], "escalate",
+                             set(), [], preview={"alert": {"entities": {"domains": ["mega.nz"]}}})
+    again = verdict._actions(first, "escalate", set(), [], preview={"alert": {"entities": {"domains": ["mega.nz"]}}})
+    assert again[0]["justification"].count("ús dual") == 1

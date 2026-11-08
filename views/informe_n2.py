@@ -15,6 +15,27 @@ from core import data, ui
 SCHEMA = os.path.join(data.ROOT, "..", "DTT-UAB-The-Hack", "01_contexto", "ticket_salida.schema.json")
 
 
+# Lo que cuenta de un registro, en este orden (el formato de Deloitte pide «finding»: qué muestra, no solo su tipo)
+FINDING_KEYS = ("event_type", "event", "eventName", "action", "result", "status", "process_name", "command_line",
+                "url", "domain", "query", "response_summary", "dest_ip", "dst_ip", "dst", "src_ip", "src",
+                "sourceIPAddress", "sender", "subject", "target", "user", "upn", "customer_id", "hostname",
+                "bytes_out", "bytes", "app", "country")
+
+
+def finding(e: dict) -> str:
+    """Una línea con lo que muestra un registro: tipo y los datos que importan (sin el texto libre largo)."""
+    parts = []
+    for k in FINDING_KEYS:
+        v = e.get(k)
+        if v in (None, "", [], {}):
+            continue
+        v = str(v).replace("\n", " ")
+        parts.append(v[:70] + ("…" if len(v) > 70 else "") if k == "event_type" else f"{k}={v[:70]}")
+        if len(parts) == 5:
+            break
+    return " · ".join(parts)[:240] or "registre relacionat"
+
+
 def build_ticket(r: dict) -> dict:
     """Contrato del front -> ticket de Deloitte. La decisión de la persona, si existe, manda sobre la propuesta."""
     ctx = r["contexts"]
@@ -37,8 +58,8 @@ def build_ticket(r: dict) -> dict:
             "customers": [c.get("customer_id") for c in (r["alert"].get("entities") or {}).get("customers", [])],
         },
         "summary": r["summary"] or r["justification"] or r["severity_rationale"],
-        "evidence": [{"source": e.get("_source", ""), "event_id": e.get("event_id", ""),
-                      "finding": e.get("event_type") or e.get("action") or ""} for e in r["related_logs"]],
+        "evidence": [{"source": e.get("_source", ""), "event_id": e.get("event_id", ""), "finding": finding(e)}
+                     for e in r["related_logs"][:15]],
         "enrichment": [{"indicator": q["path"].rsplit("/", 1)[-1], "type": "intel", "source": "TIP + GeoIP",
                         "result": q["summary"]} for q in r["queries"] if q["path"].startswith("/intel/")]
                       + [{"indicator": c["key"], "type": "sha256", "source": "Sandbox",

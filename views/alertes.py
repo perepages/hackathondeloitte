@@ -315,7 +315,10 @@ def render_detail(r: dict, scroll: bool) -> None:
                 try:
                     with st.spinner("Redactant…"):
                         text = st.write_stream(data.action_plan(r))
-                    plans[r["alert_id"]] = text if isinstance(text, str) else "".join(map(str, text))
+                    text = text if isinstance(text, str) else "".join(map(str, text))
+                    with st.spinner("Comprovant que estigui en català…"):
+                        text = data.plan_in_catalan(text)
+                    plans[r["alert_id"]] = text
                     st.rerun()
                 except Exception as exc:  # pasarela caída, timeout…
                     st.error(f"No s'ha pogut redactar el pla: {exc}")

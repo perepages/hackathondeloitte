@@ -51,8 +51,10 @@ injection_flags = guard.injection_flags  # en guard.py: castellano, catalán, in
 PLAIN = [  # lo que la IA a veces copia de sus instrucciones, dicho como lo ve la persona
     (r"\bbenign_true_positive\b", "activitat autoritzada"), (r"\btrue_positive\b", "atac real"),
     (r"\bfalse_positive\b", "falsa alarma"), (r"\bneeds_more_info\b", "falta informació"),
-    (r"\s*\(?\s*cubre_esta_alerta\s*[=:]?\s*(false|fals)\s*\)?", " (no cobreix aquesta alerta)"),
-    (r"\s*\(?\s*cubre_esta_alerta\s*[=:]?\s*(true|cert)\s*\)?", " (cobreix aquesta alerta)"),
+    # la IA también lo escribe mal («cobre_esta_alerta», «cubre esta alerta=true»…)
+    (r"\s*\(?\s*c[ou]bre[_ ]esta[_ ]alerta\s*[=:]?\s*(false|fals)\s*\)?", " (no cobreix aquesta alerta)"),
+    (r"\s*\(?\s*c[ou]bre[_ ]esta[_ ]alerta\s*[=:]?\s*(true|cert)\s*\)?", " (cobreix aquesta alerta)"),
+    (r"\bc[ou]bre_esta_alerta\b", "cobreix aquesta alerta"),
     (r"\bseverity_adjustment\b", "ajust de gravetat"), (r"\bcambios_aprobados\b", "canvis aprovats"),
 ]
 
@@ -191,6 +193,11 @@ def _targets(action: str, target: str) -> list[str]:
     return list(dict.fromkeys(out))
 
 
+def _suffix(text: str, extra: str) -> str:
+    """Añade una aclaración a la justificación una sola vez (las acciones pueden pasar por aquí más de una vez)."""
+    return text if extra.strip() in text else text + extra
+
+
 def _legit_domains(alert: dict) -> tuple[str, ...]:
     ev = alert.get("evidence") or {}
     own = [str(v).lower() for k, v in ev.items() if k.startswith("legit") and isinstance(v, str) and "." in v]
@@ -227,18 +234,21 @@ def _actions(raw: list, decision: str, ot: set[str], notes: list[str], preview: 
             notes.append(f"Es descarta «{action}» sobre «{target[:80]}»: no apareix a les dades de l'alerta "
                          "(no s'actua mai sobre un objectiu que no surti a les evidències).")
             continue
+        if problem := guard.target_type_problem(action, target, preview.get("alert")):
+            notes.append(f"Es descarta «{action}» sobre «{target[:80]}»: {problem}.")
+            continue
         approval = action not in NO_APPROVAL
         why = str(item.get("justification") or "").strip()
         if action == "block_ioc" and any(target == d or target.endswith("." + d) for d in DUAL_USE):
             approval = True
-            why += " Servei legítim d'ús dual: bloquejar-lo per a tota l'empresa requereix N2."
+            why = _suffix(why, " Servei legítim d'ús dual: bloquejar-lo per a tota l'empresa requereix N2.")
         elif action == "block_ioc" and (reason := guard.protected_reason(target, preview, legit)):
             approval = True
-            why += f" No es bloqueja automàticament: {reason}; ho ha de confirmar N2."
+            why = _suffix(why, f" No es bloqueja automàticament: {reason}; ho ha de confirmar N2.")
             notes.append(f"Bloquejar {target} requereix N2: {reason}.")
         if suspicious and approval is False and action not in ("escalate", "close"):
             approval = True
-            why += " Possible intent de manipulació a l'alerta: cap acció automàtica, ho confirma N2."
+            why = _suffix(why, " Possible intent de manipulació a l'alerta: cap acció automàtica, ho confirma N2.")
         if (action, target) in seen:
             continue
         seen.add((action, target))
